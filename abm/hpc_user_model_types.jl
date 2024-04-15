@@ -2,6 +2,7 @@ using Agents
 using Random
 using DocStringExtensions
 using DataFrames: DataFrame
+using DataStructures
 
 @enum SchedulerType NotScheduled=1 FIFO=2 Backfill=3
 
@@ -15,18 +16,24 @@ mutable struct Task
     id::Int64
     "user to which this task belong"
     user_id::Int64
-    "total nodetime to finish this task"
+    "total nodetime to finish this task, if -1 then no limit"
     nodetime_total::Int64
     "nodetime left to finish this task"
     nodetime_left::Int64
+    "nodetime left to finish this task including submitted jobs"
+    nodetime_left_unplanned::Int64
+    "nodetime completed so far"
+    nodetime_done::Int64
     "Create time"
     create_time::Int64
     "task activation time creation"
     activation_time::Int64
     "last job end time"
     finish_time::Int64
+    "max concurrent jobs"
+    max_concurrent_jobs::Int64
     "current job, 0 if none"
-    current_jobs::Int64
+    current_jobs::Vector{Int64}
     "list of jobs worked on this task"
     jobs::Vector{Int64}
 end
@@ -50,6 +57,8 @@ mutable struct BatchJob
     nodes_list::Vector{Int64}
 end
 
+Base.isless(j1::BatchJob, j2::BatchJob) = j1.submit_time < j2.submit_time
+
 """
 User
 $(TYPEDFIELDS)
@@ -67,6 +76,10 @@ $(TYPEDFIELDS)
     tasks_done::Vector{Task}
     "finished jobs for User to process"
     jobs_to_process::Vector{BatchJob}
+    "Task for inidividual jobs"
+    inividual_jobs_task::Task
+    "jobs which are not bind to task"
+    inividual_jobs::SortedSet{BatchJob}
 end
 
 """
@@ -117,5 +130,8 @@ mutable struct Simulation
     something else
     """
     user_extra_step::Union{Function, Nothing}
+    """
+    executed at the end of model_step!
+    """
     model_extra_step::Union{Function, Nothing}
 end
