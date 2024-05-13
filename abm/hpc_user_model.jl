@@ -47,9 +47,14 @@ function User(
     max_concurrent_tasks::Int64=4, 
     task_split_schema::Int64=1,
     max_nodes_per_job::Int64=0,
-    max_time_per_job::Int64=0
+    max_time_per_job::Int64=0,
+    user_id::Int64 = -1
     )
-    sim.last_user_id += 1
+    if user_id==-1
+        sim.last_user_id += 1
+    else
+        sim.last_user_id = user_id
+    end
     create_time = isnothing(sim.model) ? 0 : abmtime(sim.model)
 
     user=User(
@@ -225,6 +230,7 @@ function place_job!(model::StandardABM, resource::HPCResource, job_position_at_q
     job = popat!(resource.queue, job_position_at_queue)
     resource.executing[job.id] = job
     run_till = abmtime(model)+job.walltime
+    job.start_time = abmtime(model)
     node_count = 0
     for i in 1:resource.nodes
         if resource.node_used_by_job[i] == 0
@@ -302,6 +308,7 @@ function check_finished_job!(sim::Simulation, model::StandardABM, resource::HPCR
         if resource.node_released_at[i] >= 0 && resource.node_released_at[i] <= cur_time
             job_id = resource.node_used_by_job[i]
             job = pop!(resource.executing, job_id)
+            job.end_time = abmtime(model)
             user = model[job.task.user_id]
             # clear from nodes
             for i2 in i:resource.nodes
@@ -355,10 +362,25 @@ function add_model!(sim::Simulation; )
     )
 end
 
+function is_workload_done(model, s)
+    s % 1000 != 0 && return false
+    
+    sim = getproperty(model,:sim)
+
+    length(sim.resource.queue) > 0 && return false
+    length(sim.resource.executing) > 0 && return false
+
+    for user in sim.users_list
+        length(user.inividual_jobs) > 0 && return false
+        length(user.tasks_active) > 0 && return false
+        length(user.tasks_to_do) > 0 && return false
+    end
+
+    return true
+end
 
 
-
-function run!(sim::Simulation, nsteps::Int64)
+function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     model::StandardABM = sim.model
     # Users Statistics
     adata0 = [
@@ -372,9 +394,18 @@ function run!(sim::Simulation, nsteps::Int64)
         (:jobs_running, m -> length(m.resource.executing)),
         (:jobs_done, m -> length(m.resource.history)),
         ]
+    if nsteps!=-1
+        run_till_no_jobs = false
+    end
+    
+    if run_till_no_jobs
+        end_criteria = is_workload_done
+    else
+        end_criteria = nsteps
+    end
 
     sim.adf, sim.mdf = run!(
-        model, nsteps; 
+        model, end_criteria; 
         adata=[(v[2],v[3]) for v in adata0], 
         mdata=[v[2] for v in mdata0])
 
