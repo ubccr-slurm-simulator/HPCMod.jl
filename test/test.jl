@@ -5,7 +5,7 @@ Pkg.activate(".")
 # Pkg.add("DataFrames")
 # Pkg.add("Tidiers")
 
-include("hpc_user_model.jl")
+using HPCMod
 
 function run_sim(;scheduler_backfill=true, rng=Random.Xoshiro(123))
     sim = Simulation(;rng)
