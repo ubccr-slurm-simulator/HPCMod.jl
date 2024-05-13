@@ -1,5 +1,9 @@
 # HPCMod - HPC Resources Modeling and Simulation Framework
 
+[![CI](https://github.com/ubccr-slurm-simulator/HPCMod.jl/workflows/CI/badge.svg)](https://github.com/ubccr-slurm-simulator/HPCMod.jl/actions?query=workflow%3ACI)
+
+
+
 ## Prerequisites
 
 Install Julia
