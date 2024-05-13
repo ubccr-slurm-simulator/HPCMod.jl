@@ -11,7 +11,7 @@ using DataStructures
 
 
 used_nodes(r::HPCResource) = sum(r.node_used_by_job .!= 0)
-used_nodes(m::StandardABM) = used_nodes(m.resource)
+used_nodes(m::StandardABM) = used_nodes(m.sim.resource)
 
 """
 if user_id is specified it is up to programmer to add it to user.tasks_to_do (or not)
@@ -40,6 +40,9 @@ function BatchJob(sim::Simulation,task::CompTask, nodes::Int64, walltime::Int64;
     return sim.jobs_list[sim.last_job_id]
 end
 
+"""
+Create new user, add it to model
+"""
 function User(
     sim::Simulation; 
     max_concurrent_tasks::Int64=4, 
@@ -68,6 +71,10 @@ function User(
         SortedSet{BatchJob}())
 
     push!(sim.users_list, user)
+
+    # add agent to model
+    add_agent!(user, sim.model)
+
     return sim.users_list[sim.last_user_id]
 end
 
@@ -88,8 +95,14 @@ function add_resource!(sim::Simulation;
         max_nodes_per_job, max_time_per_job,
         scheduler_fifo, scheduler_backfill
     )
+
+    sim.resource
 end
 
+
+"""
+Simulation constructor
+"""
 function Simulation(
     ;
     id::Int64=1,
@@ -98,7 +111,7 @@ function Simulation(
     user_extra_step::Union{Function, Nothing}=nothing,
     model_extra_step::Union{Function, Nothing}=nothing
     )
-    Simulation(
+    sim = Simulation(
         id,
         timeunits_per_day,
         0,[],
@@ -112,6 +125,18 @@ function Simulation(
         nothing,
         user_extra_step, model_extra_step
     )
+
+    sim.model = StandardABM(
+        User,
+        sim.space;
+        model_step!, 
+        properties = Dict(
+            :sim => sim), 
+        sim.rng,
+        scheduler = Schedulers.Randomly()
+    )
+
+    sim
 end
 
 """
@@ -121,8 +146,8 @@ Max time
 """
 function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::User, task::CompTask)::BatchJob
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0") 
-    max_nodes_per_job = model.resource.max_nodes_per_job
-    max_time_per_job = model.resource.max_time_per_job
+    max_nodes_per_job = model.sim.resource.max_nodes_per_job
+    max_time_per_job = model.sim.resource.max_time_per_job
 
     # user's restriction
     if user.max_nodes_per_job > 0 && user.max_nodes_per_job < max_nodes_per_job
@@ -327,9 +352,9 @@ end
 function model_step!(model::StandardABM)
     sim::Simulation = model.sim
     # check finished job
-    check_finished_job!(sim, model, model.resource)
+    check_finished_job!(sim, model, model.sim.resource)
     # schedule
-    run_scheduler!(sim, model, model.resource)
+    run_scheduler!(sim, model, model.sim.resource)
 
     # ask users to do their staff
     for id in abmscheduler(model)(model)
@@ -341,23 +366,10 @@ function model_step!(model::StandardABM)
     end
 
     # schedule
-    run_scheduler!(sim, model, model.resource)
+    run_scheduler!(sim, model, model.sim.resource)
 
     # model extra step
     isnothing(sim.model_extra_step) == false && sim.model_extra_step(sim, model)
-end
-
-function add_model!(sim::Simulation; )
-    sim.model = StandardABM(
-        User,
-        sim.space;
-        model_step!, 
-        properties = Dict(
-            :resource => sim.resource,
-            :sim => sim), 
-        sim.rng,
-        scheduler = Schedulers.Randomly()
-    )
 end
 
 function is_workload_done(model, s)
@@ -387,10 +399,10 @@ function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
         ]
     # Resource Statistics
     mdata0 = [
-        (:used_nodes, m -> sum(m.resource.node_used_by_job .!= 0)),
-        (:jobs_in_queue, m -> length(m.resource.queue)),
-        (:jobs_running, m -> length(m.resource.executing)),
-        (:jobs_done, m -> length(m.resource.history)),
+        (:used_nodes, m -> sum(m.sim.resource.node_used_by_job .!= 0)),
+        (:jobs_in_queue, m -> length(m.sim.resource.queue)),
+        (:jobs_running, m -> length(m.sim.resource.executing)),
+        (:jobs_done, m -> length(m.sim.resource.history)),
         ]
     if nsteps!=-1
         run_till_no_jobs = false

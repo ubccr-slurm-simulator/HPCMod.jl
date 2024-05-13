@@ -31,7 +31,6 @@ export add_resource!
 # export run_scheduler!
 # export check_finished_job!
 export model_step!
-export add_model!
 # export is_workload_done
 export run!
 

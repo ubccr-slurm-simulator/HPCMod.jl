@@ -2,9 +2,10 @@ using Random
 using Agents
 using HPCMod
 
-rng=Random.Xoshiro(123)
-sim = Simulation(;rng)
+# Init simulation, seed a random generator
+sim = Simulation(;rng=Random.Xoshiro(123))
 
+# Add HPC resource
 add_resource!(
     sim; 
     nodes=10,
@@ -12,21 +13,18 @@ add_resource!(
     max_time_per_job=24*3,
     scheduler_backfill=true)
 
-add_model!(sim;)
-
 # add four users
-for n in 1:2
+for i_user in 1:4
     user = User(
         sim;
         max_concurrent_tasks=2
         )
-    add_agent!(user, sim.model)
-    CompTask(sim; user, nodetime=100)
-    CompTask(sim; user, nodetime=100)
-    CompTask(sim; user, nodetime=100)
-    CompTask(sim; user, nodetime=100)
+    for icomptask in 1:4
+        CompTask(sim; user, nodetime=100)
+    end
 end
 
-run!(sim; run_till_no_jobs=true)
+adf, mdf = run!(sim; run_till_no_jobs=true)
 
-
+println(adf)
+println(mdf)
