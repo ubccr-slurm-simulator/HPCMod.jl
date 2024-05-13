@@ -10,15 +10,13 @@ using Tidier
 using DataStructures
 
 
-include("hpc_user_model_types.jl")
-
 used_nodes(r::HPCResource) = sum(r.node_used_by_job .!= 0)
 used_nodes(m::StandardABM) = used_nodes(m.resource)
 
 """
 if user_id is specified it is up to programmer to add it to user.tasks_to_do (or not)
 """
-function Task(
+function CompTask(
     sim::Simulation; 
     user::Union{User, Nothing}=nothing, 
     user_id::Union{Int64, Nothing}=nothing, 
@@ -30,13 +28,13 @@ function Task(
     user_id = isnothing(user_id) ? user.id : user_id
 
     sim.last_task_id += 1
-    task = Task(sim.last_task_id, user_id, nodetime, nodetime, nodetime, 0, create_time, 0, 0, max_concurrent_jobs, [], [])
+    task = CompTask(sim.last_task_id, user_id, nodetime, nodetime, nodetime, 0, create_time, 0, 0, max_concurrent_jobs, [], [])
     push!(sim.task_list, task)
     isnothing(user)==false && push!(user.tasks_to_do, sim.task_list[sim.last_task_id])
     return sim.task_list[sim.last_task_id]
 end
 
-function BatchJob(sim::Simulation,task::Task, nodes::Int64, walltime::Int64; submit_time::Int64=-1)
+function BatchJob(sim::Simulation,task::CompTask, nodes::Int64, walltime::Int64; submit_time::Int64=-1)
     sim.last_job_id += 1
     push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime,submit_time,0,0,NotScheduled,[]))
     return sim.jobs_list[sim.last_job_id]
@@ -66,7 +64,7 @@ function User(
         task_split_schema,
         [],[],[],
         [],
-        Task(sim; user_id=sim.last_user_id, nodetime=-1, create_time, max_concurrent_jobs=1_000_000),
+        CompTask(sim; user_id=sim.last_user_id, nodetime=-1, create_time, max_concurrent_jobs=1_000_000),
         SortedSet{BatchJob}())
 
     push!(sim.users_list, user)
@@ -117,11 +115,11 @@ function Simulation(
 end
 
 """
-Task Split Strategy 1
+CompTask Split Strategy 1
 Max nodes allowed
 Max time
 """
-function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::User, task::Task)::BatchJob
+function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::User, task::CompTask)::BatchJob
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0") 
     max_nodes_per_job = model.resource.max_nodes_per_job
     max_time_per_job = model.resource.max_time_per_job

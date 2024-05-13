@@ -11,8 +11,8 @@ Overall single compute job to do
 
 $(TYPEDFIELDS)
 """
-mutable struct Task
-    "Task id"
+mutable struct CompTask
+    "CompTask id"
     id::Int64
     "user to which this task belong"
     user_id::Int64
@@ -39,14 +39,14 @@ mutable struct Task
 end
 
 """
-a batch job represent a manageble portion of Task
+a batch job represent a manageble portion of CompTask
 
 $(TYPEDFIELDS)
 """
 mutable struct BatchJob
     "Job id - smaller id does not nessesary guaranee ealier submition"
     id::Int64
-    task::Task
+    task::CompTask
     nodes::Int64
     walltime::Int64
     submit_time::Int64
@@ -71,13 +71,13 @@ $(TYPEDFIELDS)
     "max job walltime per job, 0 - there is no constrain"
     max_time_per_job::Int64
     task_split_schema::Int64
-    tasks_to_do::Vector{Task}
-    tasks_active::Vector{Task}
-    tasks_done::Vector{Task}
+    tasks_to_do::Vector{CompTask}
+    tasks_active::Vector{CompTask}
+    tasks_done::Vector{CompTask}
     "finished jobs for User to process"
     jobs_to_process::Vector{BatchJob}
-    "Task for inidividual jobs"
-    inividual_jobs_task::Task
+    "CompTask for inidividual jobs"
+    inividual_jobs_task::CompTask
     "jobs which are not bind to task"
     inividual_jobs::SortedSet{BatchJob}
 end
@@ -113,7 +113,7 @@ mutable struct Simulation
     id::Int64
     timeunits_per_day::Int64
     last_task_id::Int64
-    task_list::Vector{Task}
+    task_list::Vector{CompTask}
     last_job_id::Int64
     jobs_list::Vector{BatchJob}
     last_user_id::Int64
