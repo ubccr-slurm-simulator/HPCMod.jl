@@ -1,7 +1,7 @@
 # HPCMod - HPC Resources Modeling and Simulation Framework
 
 [![CI](https://github.com/ubccr-slurm-simulator/HPCMod.jl/workflows/CI/badge.svg)](https://github.com/ubccr-slurm-simulator/HPCMod.jl/actions?query=workflow%3ACI)
-
+[![codecov](https://codecov.io/gh/ubccr-slurm-simulator/HPCMod.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ubccr-slurm-simulator/HPCMod.jl)
 
 
 ## Prerequisites
