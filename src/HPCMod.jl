@@ -1,10 +1,5 @@
 module HPCMod
 
-export hello_world
-function hello_world()
-    "Hello world"
-end
-
 export CompTask
 export BatchJob
 #export Base.isless

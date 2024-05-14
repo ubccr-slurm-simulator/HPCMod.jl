@@ -1,3 +1,7 @@
+# VSCode
+/.vscode
+/HPCMod.code-workspace
+# some temp internal tests
 /bridges2
 /simple1
 /stampede2skx

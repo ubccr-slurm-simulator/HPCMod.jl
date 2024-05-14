@@ -34,9 +34,22 @@ function CompTask(
     return sim.task_list[sim.last_task_id]
 end
 
-function BatchJob(sim::Simulation, task::CompTask, nodes::Int64, walltime::Int64; submit_time::Int64=-1)
+"""
+Create a BatchJob for task
+"""
+function BatchJob(
+    sim::Simulation, task::CompTask; 
+    nodes::Int64=1,
+    walltime::Int64=1,
+    submit_time::Int64=-1,
+    jobs_list::Union{SortedSet,Nothing}=nothing)::BatchJob
+
     sim.last_job_id += 1
     push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime, submit_time, 0, 0, NotScheduled, []))
+    
+    if jobs_list !== nothing
+        push!(jobs_list, sim.jobs_list[sim.last_job_id])
+    end
     return sim.jobs_list[sim.last_job_id]
 end
 
@@ -50,7 +63,7 @@ function User(
     max_nodes_per_job::Int64=0,
     max_time_per_job::Int64=0,
     user_id::Int64=-1
-)
+)::User
     if user_id == -1
         sim.last_user_id += 1
     else
@@ -84,7 +97,7 @@ function add_resource!(sim::Simulation;
     max_time_per_job=24 * 3,
     scheduler_fifo=true,
     scheduler_backfill=true
-)
+)::HPCResource
     sim.space = GridSpace((nodes,); periodic=false, metric=:manhattan)
     sim.resource = HPCResource(
         nodes,
@@ -110,7 +123,7 @@ function Simulation(
     rng::AbstractRNG=Random.default_rng(123),
     user_extra_step::Union{Function,Nothing}=nothing,
     model_extra_step::Union{Function,Nothing}=nothing
-)
+)::Simulation
     sim = Simulation(
         id,
         timeunits_per_day,
@@ -167,7 +180,7 @@ function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::
         walltime = max_time_per_job
     end
 
-    BatchJob(sim, task, nodes, walltime)
+    BatchJob(sim, task; nodes, walltime)
 end
 
 task_split! = [
