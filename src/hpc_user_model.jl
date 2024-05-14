@@ -2,7 +2,7 @@ using Agents
 using Random
 using DocStringExtensions
 
-using Statistics: mean,std
+using Statistics: mean, std
 using DataFrames
 
 import Agents: run!
@@ -17,26 +17,26 @@ used_nodes(m::StandardABM) = used_nodes(m.sim.resource)
 if user_id is specified it is up to programmer to add it to user.tasks_to_do (or not)
 """
 function CompTask(
-    sim::Simulation; 
-    user::Union{User, Nothing}=nothing, 
-    user_id::Union{Int64, Nothing}=nothing, 
+    sim::Simulation;
+    user::Union{User,Nothing}=nothing,
+    user_id::Union{Int64,Nothing}=nothing,
     nodetime::Int64=72,
-    create_time::Int64=0, 
+    create_time::Int64=0,
     max_concurrent_jobs::Int64=1
-    )
+)
     isnothing(user) && isnothing(user_id) && error("either user or user_id should be specified!")
     user_id = isnothing(user_id) ? user.id : user_id
 
     sim.last_task_id += 1
     task = CompTask(sim.last_task_id, user_id, nodetime, nodetime, nodetime, 0, create_time, 0, 0, max_concurrent_jobs, [], [])
     push!(sim.task_list, task)
-    isnothing(user)==false && push!(user.tasks_to_do, sim.task_list[sim.last_task_id])
+    isnothing(user) == false && push!(user.tasks_to_do, sim.task_list[sim.last_task_id])
     return sim.task_list[sim.last_task_id]
 end
 
-function BatchJob(sim::Simulation,task::CompTask, nodes::Int64, walltime::Int64; submit_time::Int64=-1)
+function BatchJob(sim::Simulation, task::CompTask, nodes::Int64, walltime::Int64; submit_time::Int64=-1)
     sim.last_job_id += 1
-    push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime,submit_time,0,0,NotScheduled,[]))
+    push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime, submit_time, 0, 0, NotScheduled, []))
     return sim.jobs_list[sim.last_job_id]
 end
 
@@ -44,28 +44,28 @@ end
 Create new user, add it to model
 """
 function User(
-    sim::Simulation; 
-    max_concurrent_tasks::Int64=4, 
+    sim::Simulation;
+    max_concurrent_tasks::Int64=4,
     task_split_schema::Int64=1,
     max_nodes_per_job::Int64=0,
     max_time_per_job::Int64=0,
-    user_id::Int64 = -1
-    )
-    if user_id==-1
+    user_id::Int64=-1
+)
+    if user_id == -1
         sim.last_user_id += 1
     else
         sim.last_user_id = user_id
     end
     create_time = isnothing(sim.model) ? 0 : abmtime(sim.model)
 
-    user=User(
+    user = User(
         sim.last_user_id,
         (1,),
         max_concurrent_tasks,
         max_nodes_per_job,
         max_time_per_job,
         task_split_schema,
-        [],[],[],
+        [], [], [],
         [],
         CompTask(sim; user_id=sim.last_user_id, nodetime=-1, create_time, max_concurrent_jobs=1_000_000),
         SortedSet{BatchJob}())
@@ -78,20 +78,20 @@ function User(
     return sim.users_list[sim.last_user_id]
 end
 
-function add_resource!(sim::Simulation; 
+function add_resource!(sim::Simulation;
     nodes=10,
     max_nodes_per_job=4,
-    max_time_per_job=24*3,
+    max_time_per_job=24 * 3,
     scheduler_fifo=true,
     scheduler_backfill=true
-    )
-    sim.space = GridSpace((nodes,); periodic = false, metric = :manhattan)
+)
+    sim.space = GridSpace((nodes,); periodic=false, metric=:manhattan)
     sim.resource = HPCResource(
         nodes,
-        zeros(Int64,nodes),
-        fill(Int64(-1),nodes),
-        fill(Int64(-1),nodes),
-        [],Dict{Int64,BatchJob}(),[],
+        zeros(Int64, nodes),
+        fill(Int64(-1), nodes),
+        fill(Int64(-1), nodes),
+        [], Dict{Int64,BatchJob}(), [],
         max_nodes_per_job, max_time_per_job,
         scheduler_fifo, scheduler_backfill
     )
@@ -107,16 +107,16 @@ function Simulation(
     ;
     id::Int64=1,
     timeunits_per_day::Int64=24,
-    rng::AbstractRNG = Random.default_rng(123),
-    user_extra_step::Union{Function, Nothing}=nothing,
-    model_extra_step::Union{Function, Nothing}=nothing
-    )
+    rng::AbstractRNG=Random.default_rng(123),
+    user_extra_step::Union{Function,Nothing}=nothing,
+    model_extra_step::Union{Function,Nothing}=nothing
+)
     sim = Simulation(
         id,
         timeunits_per_day,
-        0,[],
-        0,[],
-        0,[],
+        0, [],
+        0, [],
+        0, [],
         nothing,
         nothing,
         nothing,
@@ -129,11 +129,11 @@ function Simulation(
     sim.model = StandardABM(
         User,
         sim.space;
-        model_step!, 
-        properties = Dict(
-            :sim => sim), 
+        model_step!,
+        properties=Dict(
+            :sim => sim),
         sim.rng,
-        scheduler = Schedulers.Randomly()
+        scheduler=Schedulers.Randomly()
     )
 
     sim
@@ -145,7 +145,7 @@ Max nodes allowed
 Max time
 """
 function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::User, task::CompTask)::BatchJob
-    task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0") 
+    task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
     max_nodes_per_job = model.sim.resource.max_nodes_per_job
     max_time_per_job = model.sim.resource.max_time_per_job
 
@@ -166,7 +166,7 @@ function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::
     if walltime > max_time_per_job
         walltime = max_time_per_job
     end
-    
+
     BatchJob(sim, task, nodes, walltime)
 end
 
@@ -180,17 +180,17 @@ function submit_job(sim::Simulation, model::StandardABM, resource::HPCResource, 
     elseif job.submit_time != abmtime(model)
         error("Preplaned job: job.submit_time != abmtime(model)")
     end
-    job.task.nodetime_left_unplanned -= job.nodes * job.walltime 
+    job.task.nodetime_left_unplanned -= job.nodes * job.walltime
 
     push!(resource.queue, job)
 
     push!(job.task.current_jobs, job.id)
-    
+
     return
 end
 
 function user_step!(sim::Simulation, model::StandardABM, user::User)
-    if length(user.inividual_jobs)==0 && length(user.tasks_to_do) == 0 && length(user.tasks_active) == 0
+    if length(user.inividual_jobs) == 0 && length(user.tasks_to_do) == 0 && length(user.tasks_active) == 0
         return
     end
     # process finished jobs, archive finished tasks
@@ -236,7 +236,7 @@ function user_step!(sim::Simulation, model::StandardABM, user::User)
             submit_job(sim, model, sim.resource, job)
         end
     end
-    
+
     # submit new individual job
     while length(user.inividual_jobs) > 0 && first(user.inividual_jobs).submit_time <= abmtime(model)
         job = pop!(user.inividual_jobs)
@@ -252,7 +252,7 @@ free nodes are good to fit this job
 function place_job!(model::StandardABM, resource::HPCResource, job_position_at_queue::Int64)
     job = popat!(resource.queue, job_position_at_queue)
     resource.executing[job.id] = job
-    run_till = abmtime(model)+job.walltime
+    run_till = abmtime(model) + job.walltime
     job.start_time = abmtime(model)
     node_count = 0
     for i in 1:resource.nodes
@@ -261,7 +261,7 @@ function place_job!(model::StandardABM, resource::HPCResource, job_position_at_q
             resource.node_released_at[i] = run_till
             node_count += 1
 
-            if node_count==job.nodes
+            if node_count == job.nodes
                 break
             end
         end
@@ -277,7 +277,7 @@ function run_scheduler_fifo!(sim::Simulation, model::StandardABM, resource::HPCR
 
         if job.nodes <= nodes_available
             job = place_job!(model, resource, 1)
-            job.scheduled_by=FIFO
+            job.scheduled_by = FIFO
         else
             break
         end
@@ -307,7 +307,7 @@ function run_scheduler_backfill!(sim::Simulation, model::StandardABM, resource::
 
         # schedule the job
         job = place_job!(model, resource, job_fit)
-        job.scheduled_by=Backfill
+        job.scheduled_by = Backfill
         #println("jobs_fit_nodes: $(jobs_fit_nodes) next_fifo_job_starttime $(next_fifo_job_starttime) jobs_fit_nodes_and_time $(jobs_fit_nodes_and_time)")
 
         break
@@ -374,8 +374,8 @@ end
 
 function is_workload_done(model, s)
     s % 1000 != 0 && return false
-    
-    sim = getproperty(model,:sim)
+
+    sim = getproperty(model, :sim)
 
     length(sim.resource.queue) > 0 && return false
     length(sim.resource.executing) > 0 && return false
@@ -394,20 +394,20 @@ function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     model::StandardABM = sim.model
     # Users Statistics
     adata0 = [
-        (:mean_tasks_to_do, u->length(u.tasks_to_do), mean)
-        (:mean_tasks_active, u->length(u.tasks_active), mean)
-        ]
+        (:mean_tasks_to_do, u -> length(u.tasks_to_do), mean)
+        (:mean_tasks_active, u -> length(u.tasks_active), mean)
+    ]
     # Resource Statistics
     mdata0 = [
         (:used_nodes, m -> sum(m.sim.resource.node_used_by_job .!= 0)),
         (:jobs_in_queue, m -> length(m.sim.resource.queue)),
         (:jobs_running, m -> length(m.sim.resource.executing)),
         (:jobs_done, m -> length(m.sim.resource.history)),
-        ]
-    if nsteps!=-1
+    ]
+    if nsteps != -1
         run_till_no_jobs = false
     end
-    
+
     if run_till_no_jobs
         end_criteria = is_workload_done
     else
@@ -415,8 +415,8 @@ function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     end
 
     sim.adf, sim.mdf = run!(
-        model, end_criteria; 
-        adata=[(v[2],v[3]) for v in adata0], 
+        model, end_criteria;
+        adata=[(v[2], v[3]) for v in adata0],
         mdata=[v[2] for v in mdata0])
 
     rename!(sim.adf, [[:time]; [v[1] for v in adata0]])

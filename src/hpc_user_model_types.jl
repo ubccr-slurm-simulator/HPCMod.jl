@@ -4,7 +4,7 @@ using DocStringExtensions
 using DataFrames: DataFrame
 using DataStructures
 
-@enum SchedulerType NotScheduled=1 FIFO=2 Backfill=3
+@enum SchedulerType NotScheduled = 1 FIFO = 2 Backfill = 3
 
 """
 Overall single compute job to do
@@ -118,20 +118,20 @@ mutable struct Simulation
     jobs_list::Vector{BatchJob}
     last_user_id::Int64
     users_list::Vector{User}
-    resource::Union{HPCResource, Nothing}
-    space::Union{GridSpace, Nothing}
-    model::Union{StandardABM, Nothing}
+    resource::Union{HPCResource,Nothing}
+    space::Union{GridSpace,Nothing}
+    model::Union{StandardABM,Nothing}
     rng::AbstractRNG
-    adf::Union{DataFrame, Nothing}
-    mdf::Union{DataFrame, Nothing}
+    adf::Union{DataFrame,Nothing}
+    mdf::Union{DataFrame,Nothing}
     """
     Extra step by user: after finishing current jobs and 
     before initiating new good spot to create new tasks or 
     something else
     """
-    user_extra_step::Union{Function, Nothing}
+    user_extra_step::Union{Function,Nothing}
     """
     executed at the end of model_step!
     """
-    model_extra_step::Union{Function, Nothing}
+    model_extra_step::Union{Function,Nothing}
 end
