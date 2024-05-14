@@ -161,7 +161,7 @@ end
     sim = jobs_replay_on_resource(df; nodes=4, scheduler_backfill=false, workload_done_check_freq=1)
     @test Matrix(sim.resource.stats.node_occupancy_by_job) == ref_5jobs_on_4nodes
 
-    sim = jobs_replay_on_resource(df; nodes=4, scheduler_backfill=false, workload_done_check_freq=1)
+    sim = jobs_replay_on_resource(df; nodes=4, scheduler_backfill=true, workload_done_check_freq=1)
     @test Matrix(sim.resource.stats.node_occupancy_by_job) == ref_5jobs_on_4nodes_with_backfiller
 end
 

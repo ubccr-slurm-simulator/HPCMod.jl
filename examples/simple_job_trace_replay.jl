@@ -6,17 +6,21 @@ using DataFrames
 using DataStructures
 
 job_trace = DataFrame([
-    2 1 2 4;
-    4 2 3 4;
-    6 2 2 4;
-    6 1 2 4;
-    7 1 1 4;
+    2 1 2 2;
+    3 2 2 2;
+    4 2 3 3;
+    5 2 2 2;
+    5 1 2 2;
+    6 1 1 3;
 ], [
     "submit_time", "user_id", "nodes", "walltime"
 ])
 
+println("Without backfiller")
 sim = jobs_replay_on_resource(job_trace; nodes=4, scheduler_backfill=false, workload_done_check_freq=1, rng=Random.Xoshiro(123))
-show(stdout, "text/plain", Matrix(sim.resource.stats.node_occupancy_by_job))
+print(sim.resource.stats.node_occupancy_by_job)
 
+println("\nWith backfiller")
 sim = jobs_replay_on_resource(job_trace; nodes=4, scheduler_backfill=true, workload_done_check_freq=1, rng=Random.Xoshiro(123))
-show(stdout, "text/plain", Matrix(sim.resource.stats.node_occupancy_by_job))
+print(sim.resource.stats.node_occupancy_by_job)
+
