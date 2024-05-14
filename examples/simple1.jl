@@ -26,5 +26,5 @@ end
 
 adf, mdf = run!(sim; run_till_no_jobs=true)
 
-println(adf)
-println(mdf)
+println(adf[1:10,:])
+println(mdf[1:10,:])

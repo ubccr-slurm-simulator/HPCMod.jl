@@ -83,6 +83,15 @@ $(TYPEDFIELDS)
 end
 
 """
+structure to store various resource usage stats
+"""
+mutable struct HPCResourceStats
+    calc_freq::Int64
+    node_occupancy_by_user::DataFrame
+    node_occupancy_by_job::DataFrame
+end
+
+"""
 HPCResource - HPC Resource
 struct to track resource occupiency and jobs
 
@@ -107,7 +116,9 @@ mutable struct HPCResource
     max_time_per_job::Int64
     scheduler_fifo::Bool
     scheduler_backfill::Bool
+    stats::HPCResourceStats
 end
+
 
 mutable struct Simulation
     id::Int64
@@ -116,8 +127,10 @@ mutable struct Simulation
     task_list::Vector{CompTask}
     last_job_id::Int64
     jobs_list::Vector{BatchJob}
+    jobs_dict::Dict{Int64,BatchJob}
     last_user_id::Int64
     users_list::Vector{User}
+    users_dict::Dict{Int64,User}
     resource::Union{HPCResource,Nothing}
     space::Union{GridSpace,Nothing}
     model::Union{StandardABM,Nothing}
@@ -134,4 +147,5 @@ mutable struct Simulation
     executed at the end of model_step!
     """
     model_extra_step::Union{Function,Nothing}
+    workload_done_check_freq::Int64
 end

@@ -35,7 +35,7 @@ using DataFrames
 end
 
 
-@testset "Simple Run" begin
+@testset "Examples: simple1 " begin
     include("../examples/simple1.jl")
 
     # check that it at lest produce something
@@ -44,5 +44,4 @@ end
     @test sum(mdf.jobs_in_queue) > 0
     @test sum(mdf.jobs_running) > 0
     @test sum(mdf.jobs_done) > 0
-
 end

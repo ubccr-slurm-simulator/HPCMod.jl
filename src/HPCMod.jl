@@ -28,7 +28,12 @@ export add_resource!
 export model_step!
 # export is_workload_done
 export run!
+export get_nodename
+
 
 include("hpc_user_model.jl")
 
+export add_users_and_jobs_from_dataframe
+export jobs_replay_on_resource
+include("utils.jl")
 end
