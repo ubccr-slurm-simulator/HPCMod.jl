@@ -4,27 +4,33 @@ using HPCMod
 
 # Init simulation, seed a random generator
 sim = Simulation(;rng=Random.Xoshiro(123))
-
+sim.workload_done_check_freq = 1
 # Add HPC resource
 add_resource!(
     sim; 
     nodes=10,
-    max_nodes_per_job=4,
+    max_nodes_per_job=6,
     max_time_per_job=24*3,
     scheduler_backfill=true)
 
 # add four users
-for i_user in 1:4
+for user_id in 1:4
     user = User(
         sim;
         max_concurrent_tasks=2
         )
-    for icomptask in 1:4
-        CompTask(sim; user, nodetime=100)
+    for m_task_id in 1:1
+        CompTask(sim, user.id;
+            task_split_schema = user_id==4 ? AdaptiveFactor : UserPreferred,
+            submit_time=user_id+m_task_id,
+            nodetime=100, nodes_prefered=4, walltime_prefered=48)
     end
 end
+show(stdout,"text/plain", sim.task_list)
+println()
 
-adf, mdf = run!(sim; run_till_no_jobs=true)
+run!(sim; run_till_no_jobs=true);
 
-println(adf[1:10,:])
-println(mdf[1:10,:])
+println(sim.adf[1:10,:])
+println(sim.mdf[1:10,:])
+println(sim.resource.stats.node_occupancy_by_task[:,:])

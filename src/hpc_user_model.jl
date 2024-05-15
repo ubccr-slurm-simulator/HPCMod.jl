@@ -18,23 +18,52 @@ get_nodename(node_id) = @sprintf("N%04d", node_id)
 
 """
 if user_id is specified it is up to programmer to add it to user.tasks_to_do (or not)
+    task_id=0 will set task_id=-user_id for job's replay purposes
 """
 function CompTask(
-    sim::Simulation;
-    user::Union{User,Nothing}=nothing,
-    user_id::Union{Int64,Nothing}=nothing,
+    sim::Simulation,
+    user_id::Int64;
+    task_id::Int64 = -1,
     nodetime::Int64=72,
-    create_time::Int64=0,
-    max_concurrent_jobs::Int64=1
+    submit_time::Int64=0,
+    task_split_schema::TaskSplitSchema=UserPreferred,
+    max_concurrent_jobs::Int64=1,
+    nodes_prefered::Int64=-1,
+    walltime_prefered::Int64=-1,
+    inividual_jobs_task::Bool=false
 )
-    isnothing(user) && isnothing(user_id) && error("either user or user_id should be specified!")
+    task_split_schema!=JobReplay && max_concurrent_jobs > 1 && error("concurrent jobs within same task are not implemented yet")
+    
     user_id = isnothing(user_id) ? user.id : user_id
 
-    sim.last_task_id += 1
-    task = CompTask(sim.last_task_id, user_id, nodetime, nodetime, nodetime, 0, create_time, 0, 0, max_concurrent_jobs, [], [])
+    if inividual_jobs_task
+        task_id = -user_id
+    end
+    
+    if task_id == -1 && inividual_jobs_task==false
+        task_id = sim.last_task_id + 1
+    else
+        task_id in keys(sim.task_dict) && error("Such task (task_id=$(task_id)) already exists")
+    end
+    if task_id > 0
+        sim.last_task_id = task_id
+    end
+
+    task = CompTask(
+        task_id, user_id, 
+        nodetime, nodetime, nodetime, 0, 
+        submit_time, -1, -1,
+        task_split_schema,
+        max_concurrent_jobs,
+        nodes_prefered,
+        walltime_prefered,
+        Vector{Int64}(), Vector{Int64}())
+
     push!(sim.task_list, task)
-    isnothing(user) == false && push!(user.tasks_to_do, sim.task_list[sim.last_task_id])
-    return sim.task_list[sim.last_task_id]
+    task_split_schema!=JobReplay && push!(sim.users_dict[user_id].tasks_to_do, sim.task_list[end])
+    sim.task_dict[task_id] = sim.task_list[end]
+
+    return sim.task_list[end]
 end
 
 """
@@ -56,7 +85,11 @@ function BatchJob(
         sim.last_job_id in keys(sim.jobs_dict) && error("Such job (job_id=$(job_id)) already exists")
     end
 
-    push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime, submit_time, 0, 0, NotScheduled, []))
+    if submit_time==-1
+        submit_time = sim.model!==nothing ? submit_time=abmtime(sim.model) : 0
+    end
+
+    push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime, submit_time, -1, -1, NotScheduled, []))
     sim.jobs_dict[sim.last_job_id] = sim.jobs_list[end]
 
     if jobs_list !== nothing
@@ -71,9 +104,8 @@ Create new user, add it to model
 function User(
     sim::Simulation;
     max_concurrent_tasks::Int64=4,
-    task_split_schema::Int64=1,
-    max_nodes_per_job::Int64=0,
-    max_time_per_job::Int64=0,
+    max_nodes_per_job::Int64=-1,
+    max_time_per_job::Int64=-1,
     user_id::Int64=-1
 )::User
     if user_id == -1
@@ -83,18 +115,15 @@ function User(
         sim.last_user_id in keys(sim.users_dict) && error("Such user (user_id=$(user_id)) already exists")
     end
 
-    create_time = isnothing(sim.model) ? 0 : abmtime(sim.model)
-
     user = User(
         sim.last_user_id,
         (1,),
         max_concurrent_tasks,
         max_nodes_per_job,
         max_time_per_job,
-        task_split_schema,
-        [], [], [],
-        [],
-        CompTask(sim; user_id=sim.last_user_id, nodetime=-1, create_time, max_concurrent_jobs=1_000_000),
+        SortedSet{CompTask}(), Vector{CompTask}(), Vector{CompTask}(),
+        Vector{BatchJob}(),
+        CompTask(sim, sim.last_user_id; nodetime=-1, task_split_schema=JobReplay, submit_time=0, max_concurrent_jobs=1_000_000, inividual_jobs_task=true),
         SortedSet{BatchJob}())
 
     push!(sim.users_list, user)
@@ -107,7 +136,7 @@ function User(
 end
 
 function HPCResourceStats()
-    HPCResourceStats(1,DataFrame(),DataFrame())
+    HPCResourceStats(1,DataFrame(),DataFrame(),DataFrame())
 end
 
 
@@ -146,6 +175,11 @@ function add_resource!(sim::Simulation;
     for node_id in 1:nodes
         node_occupancy_by_job[!,get_nodename(node_id)]=Vector{Int64}()
     end
+    node_occupancy_by_task = sim.resource.stats.node_occupancy_by_task
+    node_occupancy_by_task.t = Vector{Int64}()
+    for node_id in 1:nodes
+        node_occupancy_by_task[!,get_nodename(node_id)]=Vector{Int64}()
+    end
 
     sim.resource
 end
@@ -164,7 +198,7 @@ function Simulation(
     sim = Simulation(
         id,
         timeunits_per_day,
-        0, Vector{CompTask}(),
+        0, Vector{CompTask}(),Dict{Int64,CompTask}(),
         0, Vector{BatchJob}(),Dict{Int64,BatchJob}(),
         0, Vector{User}(), Dict{Int64,User}(),
         nothing,
@@ -191,14 +225,19 @@ function Simulation(
 end
 
 """
-CompTask Split Strategy 1
-Max nodes allowed
-Max time
+CompTask Split Strategy use user prefered values.
+Constrained by max nodes allowed and max walltime by Resource and User
 """
-function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::User, task::CompTask)::BatchJob
+function task_split_user_prefered_values!(sim::Simulation, task::CompTask; user::Union{User,Nothing}=nothing)::BatchJob
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
-    max_nodes_per_job = model.sim.resource.max_nodes_per_job
-    max_time_per_job = model.sim.resource.max_time_per_job
+    max_nodes_per_job = sim.resource.max_nodes_per_job
+    max_time_per_job = sim.resource.max_time_per_job
+
+    if user === nothing 
+        user = sim.user_dict[task.user_id]
+    end
+
+    user.id != task.user_id && error("user.id != task.user_id, this should not happen!")
 
     # user's restriction
     if user.max_nodes_per_job > 0 && user.max_nodes_per_job < max_nodes_per_job
@@ -208,12 +247,19 @@ function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::
         max_time_per_job = user.max_time_per_job
     end
 
-    nodes = max_nodes_per_job
+    nodes = task.nodes_prefered
+    if nodes > max_nodes_per_job
+        nodes = max_nodes_per_job
+    end
+
     walltime = task.nodetime_left_unplanned ÷ nodes
     if task.nodetime_left_unplanned % nodes != 0
         walltime += 1
     end
 
+    if walltime > task.walltime_prefered
+        walltime = task.walltime_prefered
+    end
     if walltime > max_time_per_job
         walltime = max_time_per_job
     end
@@ -221,9 +267,95 @@ function task_split_maxnode_maxtime!(sim::Simulation, model::StandardABM, user::
     BatchJob(sim, task; nodes, walltime)
 end
 
-task_split! = [
-    task_split_maxnode_maxtime!
-]
+"""
+CompTask Split Strategy use AdaptiveFactor scheme.
+The nodes can be in range adaptive_factor_nodes[1]*nodes_prefered to adaptive_factor_nodes[2]*nodes_prefered depending on available nodes.
+Similarly walltime can be in range adaptive_factor_walltime[1]*walltime_prefered to adaptive_factor_walltime[2]*walltime_prefered depending on available walltime.
+Constrained by max nodes allowed and max walltime by Resource and User
+"""
+function task_split_adaptive_factor!(sim::Simulation, task::CompTask; 
+    user::Union{User,Nothing}=nothing,
+    adaptive_factor_nodes = [0.5,2.0],
+    adaptive_factor_walltime = [0.25,4.0]
+    )::BatchJob
+    task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
+
+    if user === nothing 
+        user = sim.user_dict[task.user_id]
+    end
+
+    user.id != task.user_id && error("user.id != task.user_id, this should not happen!")
+
+    println("Splitting task: $(task.id) at time $(abmtime(sim.model))")
+    # resource restriction
+    max_nodes_per_job = sim.resource.max_nodes_per_job
+    max_time_per_job = sim.resource.max_time_per_job
+    # user's restriction
+    if user.max_nodes_per_job > 0 && user.max_nodes_per_job < max_nodes_per_job
+        max_nodes_per_job = user.max_nodes_per_job
+    end
+    if user.max_time_per_job > 0 && user.max_time_per_job < max_time_per_job
+        max_time_per_job = user.max_time_per_job
+    end
+
+    nodes_left = min(floor(Int64, adaptive_factor_nodes[1]*task.nodes_prefered), max_nodes_per_job)
+    nodes_right = min(ceil(Int64, adaptive_factor_nodes[2]*task.nodes_prefered), max_nodes_per_job)
+    walltime_left = min(floor(Int64, adaptive_factor_walltime[1]*task.walltime_prefered), max_time_per_job)
+    walltime_right = min(ceil(Int64, adaptive_factor_walltime[2]*task.walltime_prefered), max_time_per_job)
+    nodes = nodes_right
+    walltime_cap = walltime_right
+    println("preferred nodes=$(task.nodes_prefered) walltime=$(task.walltime_prefered)")
+    println("nodes preferred range: [$(nodes_left),$(nodes_right)] walltime: [$(walltime_left), $(walltime_right)]")
+
+
+    # What's available on resource ?
+    # when next priority job start
+    nodes_free = sim.resource.nodes - used_nodes(sim.resource)
+    if length(sim.resource.queue) > 0
+        next_fifo_job = sim.resource.queue[1]
+        next_fifo_job_starttime = sim.resource.node_released_at_sorted[next_fifo_job.nodes]
+        println("nodes opportunity: nodes=$(nodes_free) walltime=$(next_fifo_job_starttime)")
+
+        if next_fifo_job_starttime <= 0 || next_fifo_job_starttime < walltime_left || nodes_free < nodes_left
+            nodes = min(task.nodes_prefered, max_nodes_per_job)
+            walltime_cap = min(task.walltime_prefered, max_time_per_job)
+            println("Use preferred: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+        else
+            # by this time nodes_free >= nodes_left
+            # no we want to ensure that nodes <= nodes_right
+            nodes = min(nodes_free, nodes_right)
+            walltime_cap = min(next_fifo_job_starttime, walltime_right)
+            println("Will use: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+        end
+    else
+        println("no queue go with max: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+    end
+    
+    if nodes > max_nodes_per_job
+        nodes = max_nodes_per_job
+    end
+
+    walltime = task.nodetime_left_unplanned ÷ nodes
+    if task.nodetime_left_unplanned % nodes != 0
+        walltime += 1
+    end
+
+    if walltime > walltime_cap
+        walltime = walltime_cap
+    end
+    if walltime > max_time_per_job
+        walltime = max_time_per_job
+    end
+
+    BatchJob(sim, task; nodes, walltime)
+end
+
+task_split! = Dict(
+    UserPreferred=>task_split_user_prefered_values!,
+    AdaptiveFactor=>task_split_adaptive_factor!
+)
+#    task_split_maxnode_maxtime!
+#]
 
 function submit_job(sim::Simulation, model::StandardABM, resource::HPCResource, job::BatchJob)
     if job.submit_time < 0
@@ -260,7 +392,7 @@ function user_step!(sim::Simulation, model::StandardABM, user::User)
             task = popat!(user.tasks_active, i)
 
             task.nodetime_left = 0
-            task.finish_time = abmtime(model)
+            task.end_time = abmtime(model)
 
             push!(user.tasks_done, task)
         else
@@ -273,9 +405,9 @@ function user_step!(sim::Simulation, model::StandardABM, user::User)
     isnothing(sim.user_extra_step) == false && sim.user_extra_step(sim, model, User)
 
     # activate new tasks
-    while length(user.tasks_to_do) > 0 && length(user.tasks_active) < user.max_concurrent_tasks
-        task = popfirst!(user.tasks_to_do)
-        task.activation_time = abmtime(model)
+    while length(user.tasks_to_do) > 0 && length(user.tasks_active) < user.max_concurrent_tasks && first(user.tasks_to_do).submit_time <= abmtime(model)
+        task = pop!(user.tasks_to_do)
+        task.start_time = abmtime(model)
         push!(user.tasks_active, task)
     end
 
@@ -283,7 +415,7 @@ function user_step!(sim::Simulation, model::StandardABM, user::User)
     global task_split!
     for task in user.tasks_active
         if length(task.current_jobs) < task.max_concurrent_jobs && task.nodetime_left > 0
-            job = task_split![user.task_split_schema](sim, model, user, task)
+            job = task_split![task.task_split_schema](sim, task; user)
             submit_job(sim, model, sim.resource, job)
         end
     end
@@ -415,19 +547,22 @@ function model_step_stats!(sim::Simulation)
     ncol(sim.resource.stats.node_occupancy_by_user)==0 && error("sim.resource.stats.node_occupancy_by_user was not initialized!")
     by_user = zeros(Int64,ncol(sim.resource.stats.node_occupancy_by_user))
     by_job = zeros(Int64,ncol(sim.resource.stats.node_occupancy_by_user))
+    by_task = zeros(Int64,ncol(sim.resource.stats.node_occupancy_by_user))
     by_user[1] = abmtime(sim.model)
     by_job[1] = abmtime(sim.model)
+    by_task[1] = abmtime(sim.model)
     for (job_id,job) in sim.resource.executing
         for node_id in job.nodes_list
             col_id = node_id + 1
             by_user[col_id] != 0 && error("node can be occupied only by one job, but it is not!")
             by_user[col_id] = job.task.user_id
             by_job[col_id] = job_id
+            by_task[col_id] = job.task.id
         end
     end
     push!(sim.resource.stats.node_occupancy_by_user, by_user)
     push!(sim.resource.stats.node_occupancy_by_job, by_job)
-    
+    push!(sim.resource.stats.node_occupancy_by_task, by_task)
 end
 
 function model_step!(model::StandardABM)

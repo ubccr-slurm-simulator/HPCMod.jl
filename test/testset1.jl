@@ -39,9 +39,9 @@ end
     include("../examples/simple1.jl")
 
     # check that it at lest produce something
-    @test nrow(mdf) > 100
-    @test sum(mdf.used_nodes) > 0
-    @test sum(mdf.jobs_in_queue) > 0
-    @test sum(mdf.jobs_running) > 0
-    @test sum(mdf.jobs_done) > 0
+    @test nrow(sim.mdf) > 50
+    @test sum(sim.mdf.used_nodes) > 0
+    @test sum(sim.mdf.jobs_in_queue) > 0
+    @test sum(sim.mdf.jobs_running) > 0
+    @test sum(sim.mdf.jobs_done) > 0
 end

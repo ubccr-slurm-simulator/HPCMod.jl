@@ -7,6 +7,7 @@ export User
 export HPCResource
 export Simulation
 
+export TaskSplitSchema, UserPreferred, AdaptiveFactor, JobReplay
 
 include("hpc_user_model_types.jl")
 

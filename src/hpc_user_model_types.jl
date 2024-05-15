@@ -5,6 +5,7 @@ using DataFrames: DataFrame
 using DataStructures
 
 @enum SchedulerType NotScheduled = 1 FIFO = 2 Backfill = 3
+@enum TaskSplitSchema UserPreferred = 1 AdaptiveFactor = 2 JobReplay = 3
 
 """
 Overall single compute job to do
@@ -24,19 +25,30 @@ mutable struct CompTask
     nodetime_left_unplanned::Int64
     "nodetime completed so far"
     nodetime_done::Int64
-    "Create time"
-    create_time::Int64
-    "task activation time creation"
-    activation_time::Int64
+    "Task submit time, the user can start working on it after that time"
+    submit_time::Int64
+    "Task start time"
+    start_time::Int64
     "last job end time"
-    finish_time::Int64
+    end_time::Int64
+    "Strategy for task splitting"
+    task_split_schema::TaskSplitSchema
     "max concurrent jobs"
     max_concurrent_jobs::Int64
+    "prefered number of nodes"
+    nodes_prefered::Int64
+    "prefered walltime"
+    walltime_prefered::Int64
     "current job, 0 if none"
     current_jobs::Vector{Int64}
     "list of jobs worked on this task"
     jobs::Vector{Int64}
 end
+
+"""
+Comparison in sense of which were submitted earlier
+"""
+Base.isless(t1::CompTask, t2::CompTask) = t1.submit_time < t2.submit_time
 
 """
 a batch job represent a manageble portion of CompTask
@@ -57,6 +69,9 @@ mutable struct BatchJob
     nodes_list::Vector{Int64}
 end
 
+"""
+Comparison in sense of which were submitted earlier
+"""
 Base.isless(j1::BatchJob, j2::BatchJob) = j1.submit_time < j2.submit_time
 
 """
@@ -66,12 +81,11 @@ $(TYPEDFIELDS)
 @agent struct User(GridAgent{1})
     "max concurrent tasks"
     max_concurrent_tasks::Int64
-    "max number of nodes per job, 0 - there is no constrain"
+    "max number of nodes per job, -1 - there is no constrain"
     max_nodes_per_job::Int64
-    "max job walltime per job, 0 - there is no constrain"
+    "max job walltime per job, -1 - there is no constrain"
     max_time_per_job::Int64
-    task_split_schema::Int64
-    tasks_to_do::Vector{CompTask}
+    tasks_to_do::SortedSet{CompTask}
     tasks_active::Vector{CompTask}
     tasks_done::Vector{CompTask}
     "finished jobs for User to process"
@@ -89,6 +103,7 @@ mutable struct HPCResourceStats
     calc_freq::Int64
     node_occupancy_by_user::DataFrame
     node_occupancy_by_job::DataFrame
+    node_occupancy_by_task::DataFrame
 end
 
 """
@@ -125,6 +140,7 @@ mutable struct Simulation
     timeunits_per_day::Int64
     last_task_id::Int64
     task_list::Vector{CompTask}
+    task_dict::Dict{Int64,CompTask}
     last_job_id::Int64
     jobs_list::Vector{BatchJob}
     jobs_dict::Dict{Int64,BatchJob}
