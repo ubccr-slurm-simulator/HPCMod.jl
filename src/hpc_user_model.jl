@@ -185,19 +185,48 @@ function add_resource!(sim::Simulation;
 end
 
 """
+get datetime from simulation step
+"""
+function get_datetime(sim::Simulation, step::Int64)
+    sim.timeunit*step + sim.init_datetime
+end
+
+"""
+get simulation step from datetime
+"""
+function get_step(sim::Simulation, datetime::DateTime)
+    (datetime - sim.init_datetime) ÷ sim.timeunit
+end
+
+"""
+get nearby simulation step from datetime
+"""
+function get_round_step(sim::Simulation, datetime::DateTime)
+    round(datetime - sim.init_datetime, sim.timeunit) ÷ sim.timeunit
+end
+
+"""
 Simulation constructor
 """
 function Simulation(
     ;
     id::Int64=1,
-    timeunits_per_day::Int64=24,
+    timeunit::Period=Hour(1),
+    init_datetime::DateTime=DateTime(2024,1,1),
     rng::AbstractRNG=Random.default_rng(123),
     user_extra_step::Union{Function,Nothing}=nothing,
     model_extra_step::Union{Function,Nothing}=nothing
 )::Simulation
+    cur_datetime::DateTime = init_datetime
+
+    timeunits_per_day=Day(1) ÷ timeunit
+
     sim = Simulation(
         id,
         timeunits_per_day,
+        timeunit,
+        cur_datetime::DateTime,
+        init_datetime::DateTime,
         0, Vector{CompTask}(),Dict{Int64,CompTask}(),
         0, Vector{BatchJob}(),Dict{Int64,BatchJob}(),
         0, Vector{User}(), Dict{Int64,User}(),
@@ -567,6 +596,7 @@ end
 
 function model_step!(model::StandardABM)
     sim::Simulation = model.sim
+    sim.cur_datetime = get_datetime(sim, abmtime(model))
     # it is right before abmtime(model) time
     # check finished job
     check_finished_job!(sim, model, model.sim.resource)

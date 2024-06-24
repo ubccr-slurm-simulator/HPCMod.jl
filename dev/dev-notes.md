@@ -41,4 +41,8 @@ jupyter notebook list
 ```
 
 
+# Run examples
 
+```bash
+julia --project=.. ./simple1.jl
+```

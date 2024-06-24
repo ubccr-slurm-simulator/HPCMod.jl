@@ -3,6 +3,7 @@ using Random
 using DocStringExtensions
 using DataFrames: DataFrame
 using DataStructures
+using Dates
 
 @enum SchedulerType NotScheduled = 1 FIFO = 2 Backfill = 3
 @enum TaskSplitSchema UserPreferred = 1 AdaptiveFactor = 2 JobReplay = 3
@@ -138,6 +139,9 @@ end
 mutable struct Simulation
     id::Int64
     timeunits_per_day::Int64
+    timeunit::Period
+    cur_datetime::DateTime
+    init_datetime::DateTime
     last_task_id::Int64
     task_list::Vector{CompTask}
     task_dict::Dict{Int64,CompTask}

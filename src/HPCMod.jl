@@ -31,6 +31,9 @@ export model_step!
 export run!
 export get_nodename
 
+export get_datetime
+export get_step
+export get_round_step
 
 include("hpc_user_model.jl")
 

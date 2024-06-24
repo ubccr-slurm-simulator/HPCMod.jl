@@ -1,6 +1,7 @@
 using HPCMod
 using Random
 using DataFrames
+using Dates
 
 @testset "BatchJob Comparison" begin
     sim = Simulation()
@@ -44,4 +45,22 @@ end
     @test sum(sim.mdf.jobs_in_queue) > 0
     @test sum(sim.mdf.jobs_running) > 0
     @test sum(sim.mdf.jobs_done) > 0
+end
+
+
+@testset "DateTime Conversion " begin
+    sim = Simulation()
+    @test get_datetime(sim, 2)==DateTime(2024,1,1,2,0,0)
+    @test get_datetime(sim, 25)==DateTime(2024,1,2,1,0,0)
+    @test get_datetime(sim, 24*366+2)==DateTime(2025,1,1,2,0,0)
+
+    @test get_step(sim, DateTime(2024,1,1,2,0,0))==2
+    @test get_step(sim, DateTime(2024,1,2,1,0,0))==25
+    @test get_step(sim, DateTime(2025,1,1,2,0,0))==24*366+2
+
+    @test get_round_step(sim, DateTime(2024,1,1,2,15,0))==2
+    @test get_round_step(sim, DateTime(2024,1,1,1,30,0))==2
+    @test get_round_step(sim, DateTime(2024,1,1,1,30,1))==2
+    @test get_round_step(sim, DateTime(2024,1,2,1,10,0))==25
+    @test get_round_step(sim, DateTime(2025,1,1,2,10,0))==24*366+2
 end
