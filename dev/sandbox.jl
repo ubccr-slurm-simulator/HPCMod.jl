@@ -2,24 +2,28 @@ using Random
 using Agents
 using HPCMod
 using Dates
+using Distributions
 
+# rename C:\Users\ns\.julia\juliaup\julia-1.10.2+0.x64.w64.mingw32\bin\libLLVM-15jl.dll to libLLVM.dll
+using Plots
 
 # Init simulation, seed a random generator
 sim = Simulation(;rng=Random.Xoshiro(123))
 
+function generate_think_time(sim::Simulation, user::User)
+    shape=0.23743230	
+    scale = 1.0/0.05508324	
+    gamma = Gamma(shape, scale)
+    round(Int64, rand(sim.rng, gamma))
+end
+
+shape=0.23743230	
+scale = 1.0/0.05508324	
+
+gamma = Gamma(shape, scale)
 
 
-@test get_datetime(sim, 2)==DateTime(2024,1,1,2,0,0)
-@test get_datetime(sim, 25)==DateTime(2024,1,2,1,0,0)
-@test get_datetime(sim, 24*366+2)==DateTime(2025,1,1,2,0,0)
+thinktime = round.((Int64,),rand(sim.rng, gamma, 4000))
 
-@test get_step(sim, DateTime(2024,1,1,2,0,0))==2
-@test get_step(sim, DateTime(2024,1,2,1,0,0))==25
-@test get_step(sim, DateTime(2025,1,1,2,0,0))==24*366+2
-
-@test get_round_step(sim, DateTime(2024,1,1,2,15,0))==2
-@test get_round_step(sim, DateTime(2024,1,1,1,30,0))==2
-@test get_round_step(sim, DateTime(2024,1,1,1,30,1))==2
-@test get_round_step(sim, DateTime(2024,1,2,1,10,0))==25
-@test get_round_step(sim, DateTime(2025,1,1,2,10,0))==24*366+2
+histogram(thinktime, bar_width=1)
 

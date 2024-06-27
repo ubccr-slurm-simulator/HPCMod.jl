@@ -44,6 +44,8 @@ mutable struct CompTask
     current_jobs::Vector{Int64}
     "list of jobs worked on this task"
     jobs::Vector{Int64}
+    "Next check time by user, for example send next batch job"
+    next_check_time::Int64
 end
 
 """
@@ -75,6 +77,7 @@ Comparison in sense of which were submitted earlier
 """
 Base.isless(j1::BatchJob, j2::BatchJob) = j1.submit_time < j2.submit_time
 
+
 """
 User
 $(TYPEDFIELDS)
@@ -95,6 +98,7 @@ $(TYPEDFIELDS)
     inividual_jobs_task::CompTask
     "jobs which are not bind to task"
     inividual_jobs::SortedSet{BatchJob}
+    thinktime_generator::Function
 end
 
 """

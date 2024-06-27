@@ -14,3 +14,10 @@ include("../test/runtests.jl")
 
 # run tests
 Pkg.test()
+
+
+# Start Pluto Notebook
+import Pkg
+Pkg.add("Pluto")
+import Pluto
+Pluto.run()

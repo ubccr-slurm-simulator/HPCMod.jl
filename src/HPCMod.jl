@@ -35,9 +35,14 @@ export get_datetime
 export get_step
 export get_round_step
 
+export generate_thinktime_zero
+export generate_thinktime_gamma
+
 include("hpc_user_model.jl")
 
 export add_users_and_jobs_from_dataframe
 export jobs_replay_on_resource
+export plot_node_util
 include("utils.jl")
+
 end
