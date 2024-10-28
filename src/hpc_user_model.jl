@@ -11,6 +11,8 @@ using DataStructures
 using Distributions
 using Printf
 
+verbose=false
+
 
 used_nodes(r::HPCResource) = sum(r.node_used_by_job .!= 0)
 used_nodes(m::StandardABM) = used_nodes(m.sim.resource)
@@ -321,7 +323,7 @@ function task_split_adaptive_factor!(sim::Simulation, task::CompTask;
 
     user.id != task.user_id && error("user.id != task.user_id, this should not happen!")
 
-    println("Splitting task: $(task.id) at time $(abmtime(sim.model))")
+    verbose && println("Splitting task: $(task.id) at time $(abmtime(sim.model))")
     # resource restriction
     max_nodes_per_job = sim.resource.max_nodes_per_job
     max_time_per_job = sim.resource.max_time_per_job
@@ -339,35 +341,45 @@ function task_split_adaptive_factor!(sim::Simulation, task::CompTask;
     walltime_right = min(ceil(Int64, adaptive_factor_walltime[2] * task.walltime_prefered), max_time_per_job)
     nodes = nodes_right
     walltime_cap = walltime_right
-    println("preferred nodes=$(task.nodes_prefered) walltime=$(task.walltime_prefered)")
-    println("nodes preferred range: [$(nodes_left),$(nodes_right)] walltime: [$(walltime_left), $(walltime_right)]")
+    verbose && println("preferred nodes=$(task.nodes_prefered) walltime=$(task.walltime_prefered)")
+    verbose && println("nodes preferred range: [$(nodes_left),$(nodes_right)] walltime: [$(walltime_left), $(walltime_right)]")
 
 
     # What's available on resource ?
     # when next priority job start
     nodes_free = sim.resource.nodes - used_nodes(sim.resource)
-    if length(sim.resource.queue) > 0
+     
+    if length(sim.resource.queue) > 0 && nodes_free > 0
         next_fifo_job = sim.resource.queue[1]
         next_fifo_job_starttime = sim.resource.node_released_at_sorted[next_fifo_job.nodes]
-        println("nodes opportunity: nodes=$(nodes_free) walltime=$(next_fifo_job_starttime)")
+        verbose && println("nodes opportunity: nodes=$(nodes_free) walltime=$(next_fifo_job_starttime)")
 
         if next_fifo_job_starttime <= 0 || next_fifo_job_starttime < walltime_left || nodes_free < nodes_left
             nodes = min(task.nodes_prefered, max_nodes_per_job)
             walltime_cap = min(task.walltime_prefered, max_time_per_job)
-            println("Use preferred: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+            verbose && println("Use preferred: nodes=$(nodes), walltime_cap=$(walltime_cap)")
         else
             # by this time nodes_free >= nodes_left
             # no we want to ensure that nodes <= nodes_right
             nodes = min(nodes_free, nodes_right)
             walltime_cap = min(next_fifo_job_starttime, walltime_right)
-            println("Will use: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+            verbose && println("Will use: nodes=$(nodes), walltime_cap=$(walltime_cap)")
         end
     else
-        println("no queue go with max: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+        if nodes_free==0
+            nodes = task.nodes_prefered
+            verbose && println("no free nodes go with prefered: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+        else
+            verbose && println("no queue go with max: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+        end
     end
 
     if nodes > max_nodes_per_job
         nodes = max_nodes_per_job
+    end
+
+    if nodes <= 0
+        error("nodes can not be <=0 but it is $(nodes)!")
     end
 
     walltime = task.nodetime_left_unplanned ÷ nodes
