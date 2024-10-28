@@ -143,11 +143,12 @@ end
             6 101 2 4;
             6 102 2 4]
     ]
-    for job_trace in job_traces_list
+    for (i, job_trace) in job_traces_list
         sim = jobs_replay_on_resource(DataFrame(job_trace, [
                 "submit_time", "user_id", "nodes", "walltime"
             ]); nodes=10, scheduler_backfill=false, workload_done_check_freq=1)
         if Matrix(sim.resource.stats.node_occupancy_by_job) != ref_5jobs_1user_unordered
+            println("Missmatch in test $(i)")
             println(sim.resource.stats.node_occupancy_by_job)
         end
         @test Matrix(sim.resource.stats.node_occupancy_by_job) == ref_5jobs_1user_unordered
