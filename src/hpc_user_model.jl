@@ -635,47 +635,32 @@ end
 function model_step!(model::StandardABM)
     sim::Simulation = model.sim
     sim.cur_datetime = get_datetime(sim, abmtime(model))
-    @debug "model_step! cur_datetime: $(sim.cur_datetime)\n" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
+    # @debug "model_step! cur_datetime: $(sim.cur_datetime)\n"
     # it is right before abmtime(model) time
     # check finished job
-    @debug "check_finished_job!"
     check_finished_job!(sim, model, model.sim.resource)
 
 
     # it is abmtime(model) time
     # schedule
-    @debug "run_scheduler!"
     run_scheduler!(sim, model, model.sim.resource)
 
     # ask users to do their staff
-    
-    
-    @debug "Users activities. " * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
-    ids = Vector{Int}()
-    Schedulers.get_ids!(ids, model)
-    # @code_lowered abmscheduler(model)(model)
     @debug "ids: $(ids)"
     for id in abmscheduler(model)(model)
         # here `agent_step2!` may delete agents, so we check for it manually
-        @debug id
         hasid(model, id) || continue
-        #agent_step2!(model[id], model)
-        @debug "model_step!: User: $(model[id].id) $(model[id].pos[1])." * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
         user_step!(sim, model, model[id])
     end
 
     # schedule
-    @debug "run_scheduler!" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     run_scheduler!(sim, model, model.sim.resource)
 
     # more stats
-    @debug "model_step_stats!" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     model_step_stats!(sim)
 
     # model extra step
-    @debug "model_extra_step" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     isnothing(sim.model_extra_step) == false && sim.model_extra_step(sim, model)
-    @debug "end step" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
 end
 
 function is_workload_done(model, s)
