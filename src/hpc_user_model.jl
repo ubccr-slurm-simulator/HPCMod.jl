@@ -625,9 +625,9 @@ function model_step_stats!(sim::Simulation)
 end
 
 function model_step!(model::StandardABM)
-    @debug "model_step!"
     sim::Simulation = model.sim
     sim.cur_datetime = get_datetime(sim, abmtime(model))
+    @debug "model_step! cur_datetime: $(sim.cur_datetime)"
     # it is right before abmtime(model) time
     # check finished job
     @debug "check_finished_job!"
