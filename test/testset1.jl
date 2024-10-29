@@ -37,7 +37,7 @@ end
 
 
 @testset "Examples: simple1 " begin
-    include("../examples/simple1.jl")
+    include("../examples/plain_jl/simple1.jl")
 
     # check that it at lest produce something
     @test nrow(sim.mdf) > 50
@@ -47,6 +47,20 @@ end
     @test sum(sim.mdf.jobs_done) > 0
 end
 
+@testset "Examples: simple2 " begin
+    include("../examples/plain_jl/simple2.jl")
+
+    # check that it at lest produce something
+    @test nrow(sim_nobf.mdf)==2001
+    @test nrow(sim_bf.mdf)==2001
+end
+
+@testset "Examples: simple_comp_tasks " begin
+    include("../examples/plain_jl/simple_comp_tasks.jl")
+
+    # check that it at lest produce something
+    @test abmtime(sim1.model)==19
+end
 
 @testset "DateTime Conversion " begin
     sim = Simulation()

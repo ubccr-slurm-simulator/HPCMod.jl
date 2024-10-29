@@ -90,3 +90,7 @@ The tables above show nodes occupience by job at a given time.
 
 For actual work Visual Studio Code, Jupyter Notebook and Pluto Notebook are suggested.
 
+## Exmaples
+
+For examples see [examples](examples/) 
+
