@@ -624,10 +624,18 @@ function model_step_stats!(sim::Simulation)
     push!(sim.resource.stats.node_occupancy_by_task, by_task)
 end
 
+function show_rng_state(rng1::AbstractRNG,rng2::AbstractRNG,rng3::AbstractRNG)
+    tmp_rng1 = copy(rng1);
+    tmp_rng2 = copy(rng2);
+    tmp_rng3 = copy(rng3);
+
+    "users RNG Next Int64\nrng1=$(rand(tmp_rng1,Int64))\nrng2=$(rand(tmp_rng2,Int64))\nrng3=$(rand(tmp_rng3,Int64))"
+end
+
 function model_step!(model::StandardABM)
     sim::Simulation = model.sim
     sim.cur_datetime = get_datetime(sim, abmtime(model))
-    @debug "model_step! cur_datetime: $(sim.cur_datetime)"
+    @debug "model_step! cur_datetime: $(sim.cur_datetime)\n" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     # it is right before abmtime(model) time
     # check finished job
     @debug "check_finished_job!"
@@ -641,29 +649,28 @@ function model_step!(model::StandardABM)
 
     # ask users to do their staff
     
-    rng_glb = copy(Random.default_rng());
-    rng_sim = copy(sim.rng);
-    rng_mdl = copy(abmrng(model));
-    @debug "users activities\nrng_glb=$(rand(rng_glb,Int64))\nrng_sim=$(rand(rng_sim,Int64))\nrng_mdl=$(rand(rng_mdl,Int64))"
+    
+    @debug "Users activities. " * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     for id in abmscheduler(model)(model)
         # here `agent_step2!` may delete agents, so we check for it manually
         hasid(model, id) || continue
         #agent_step2!(model[id], model)
-        @debug "model_step!: User: $(model[id].id) $(model[id].pos[1])"
+        @debug "model_step!: User: $(model[id].id) $(model[id].pos[1])." * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
         user_step!(sim, model, model[id])
     end
 
     # schedule
-    @debug "run_scheduler!"
+    @debug "run_scheduler!" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     run_scheduler!(sim, model, model.sim.resource)
 
     # more stats
-    @debug "model_step_stats!"
+    @debug "model_step_stats!" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     model_step_stats!(sim)
 
     # model extra step
-    @debug "model_extra_step"
+    @debug "model_extra_step" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
     isnothing(sim.model_extra_step) == false && sim.model_extra_step(sim, model)
+    @debug "end step" * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
 end
 
 function is_workload_done(model, s)
