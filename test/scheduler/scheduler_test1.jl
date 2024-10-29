@@ -6,6 +6,10 @@ using DataFrames
 using DataStructures
 using Logging
 
+rng_glb = copy(Random.default_rng());
+@info "Random.default_rng Next Int $(rand(rng_glb,Int64))"
+    
+
 # Replay jobs and compare node occupiency by job to refference
 # the refference was manually checked for having sense
 

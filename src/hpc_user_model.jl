@@ -640,7 +640,11 @@ function model_step!(model::StandardABM)
     run_scheduler!(sim, model, model.sim.resource)
 
     # ask users to do their staff
-    @debug "users activities"
+    
+    rng_glb = copy(Random.default_rng());
+    rng_sim = copy(sim.rng);
+    rng_mdl = copy(abmrng(model));
+    @debug "users activities\nrng_glb=$(rand(rng_glb,Int64))\nrng_sim=$(rand(rng_sim,Int64))\nrng_mdl=$(rand(rng_mdl,Int64))"
     for id in abmscheduler(model)(model)
         # here `agent_step2!` may delete agents, so we check for it manually
         hasid(model, id) || continue
