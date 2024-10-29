@@ -651,8 +651,13 @@ function model_step!(model::StandardABM)
     
     
     @debug "Users activities. " * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
+    ids = Vector{Int}()
+    get_ids!(ids, model)
+    @code_lowered abmscheduler(model)(model)
+    @debug "ids: $(ids)"
     for id in abmscheduler(model)(model)
         # here `agent_step2!` may delete agents, so we check for it manually
+        @debug id
         hasid(model, id) || continue
         #agent_step2!(model[id], model)
         @debug "model_step!: User: $(model[id].id) $(model[id].pos[1])." * show_rng_state(Random.default_rng(), sim.rng, abmrng(model))
