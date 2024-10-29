@@ -4,6 +4,7 @@ using HPCMod
 using Printf
 using DataFrames
 using DataStructures
+using Logging
 
 # Replay jobs and compare node occupiency by job to refference
 # the refference was manually checked for having sense
@@ -143,16 +144,28 @@ end
             6 101 2 4;
             6 102 2 4]
     ]
+    #init_log_level = Logging.min_enabled_level(Logging.current_logger())
+    #Logging.disable_logging(Logging.Debug - 1)
+    #Logging.disable_logging
+
     for (i, job_trace) in enumerate(job_traces_list)
+        if i==7
+            ENV["JULIA_DEBUG"] = "all"
+            @info "ref_5jobs_1user_unordered START"
+            @debug "ref_5jobs_1user_unordered (debug)"
+        end
         sim = jobs_replay_on_resource(DataFrame(job_trace, [
                 "submit_time", "user_id", "nodes", "walltime"
             ]); nodes=10, scheduler_backfill=false, workload_done_check_freq=1)
         if Matrix(sim.resource.stats.node_occupancy_by_job) != ref_5jobs_1user_unordered
-            println("Missmatch in test $(i)")
-            println(sim.resource.stats.node_occupancy_by_job)
+            @error "Missmatch in test $(i)"
+            @error sim.resource.stats.node_occupancy_by_job
         end
         @test Matrix(sim.resource.stats.node_occupancy_by_job) == ref_5jobs_1user_unordered
     end
+    #Logging.disable_logging(init_log_level)
+    @info "ref_5jobs_1user_unordered END"
+    delete!(ENV, "JULIA_DEBUG")
 
     df = DataFrame([
         102 4 101 3 4;

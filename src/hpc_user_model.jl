@@ -11,8 +11,6 @@ using DataStructures
 using Distributions
 using Printf
 
-verbose=false
-
 
 used_nodes(r::HPCResource) = sum(r.node_used_by_job .!= 0)
 used_nodes(m::StandardABM) = used_nodes(m.sim.resource)
@@ -323,7 +321,7 @@ function task_split_adaptive_factor!(sim::Simulation, task::CompTask;
 
     user.id != task.user_id && error("user.id != task.user_id, this should not happen!")
 
-    verbose && println("Splitting task: $(task.id) at time $(abmtime(sim.model))")
+    @debug "Splitting task: $(task.id) at time $(abmtime(sim.model))"
     # resource restriction
     max_nodes_per_job = sim.resource.max_nodes_per_job
     max_time_per_job = sim.resource.max_time_per_job
@@ -341,8 +339,8 @@ function task_split_adaptive_factor!(sim::Simulation, task::CompTask;
     walltime_right = min(ceil(Int64, adaptive_factor_walltime[2] * task.walltime_prefered), max_time_per_job)
     nodes = nodes_right
     walltime_cap = walltime_right
-    verbose && println("preferred nodes=$(task.nodes_prefered) walltime=$(task.walltime_prefered)")
-    verbose && println("nodes preferred range: [$(nodes_left),$(nodes_right)] walltime: [$(walltime_left), $(walltime_right)]")
+    @debug "preferred nodes=$(task.nodes_prefered) walltime=$(task.walltime_prefered)"
+    @debug "nodes preferred range: [$(nodes_left),$(nodes_right)] walltime: [$(walltime_left), $(walltime_right)]"
 
 
     # What's available on resource ?
@@ -352,25 +350,25 @@ function task_split_adaptive_factor!(sim::Simulation, task::CompTask;
     if length(sim.resource.queue) > 0 && nodes_free > 0
         next_fifo_job = sim.resource.queue[1]
         next_fifo_job_starttime = sim.resource.node_released_at_sorted[next_fifo_job.nodes]
-        verbose && println("nodes opportunity: nodes=$(nodes_free) walltime=$(next_fifo_job_starttime)")
+        @debug "nodes opportunity: nodes=$(nodes_free) walltime=$(next_fifo_job_starttime)"
 
         if next_fifo_job_starttime <= 0 || next_fifo_job_starttime < walltime_left || nodes_free < nodes_left
             nodes = min(task.nodes_prefered, max_nodes_per_job)
             walltime_cap = min(task.walltime_prefered, max_time_per_job)
-            verbose && println("Use preferred: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+            @debug "Use preferred: nodes=$(nodes), walltime_cap=$(walltime_cap)"
         else
             # by this time nodes_free >= nodes_left
             # no we want to ensure that nodes <= nodes_right
             nodes = min(nodes_free, nodes_right)
             walltime_cap = min(next_fifo_job_starttime, walltime_right)
-            verbose && println("Will use: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+            @debug "Will use: nodes=$(nodes), walltime_cap=$(walltime_cap)"
         end
     else
         if nodes_free==0
             nodes = task.nodes_prefered
-            verbose && println("no free nodes go with prefered: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+            @debug "no free nodes go with prefered: nodes=$(nodes), walltime_cap=$(walltime_cap)"
         else
-            verbose && println("no queue go with max: nodes=$(nodes), walltime_cap=$(walltime_cap)")
+            @debug "no queue go with max: nodes=$(nodes), walltime_cap=$(walltime_cap)"
         end
     end
 
@@ -627,33 +625,40 @@ function model_step_stats!(sim::Simulation)
 end
 
 function model_step!(model::StandardABM)
+    @debug "model_step!"
     sim::Simulation = model.sim
     sim.cur_datetime = get_datetime(sim, abmtime(model))
     # it is right before abmtime(model) time
     # check finished job
+    @debug "check_finished_job!"
     check_finished_job!(sim, model, model.sim.resource)
 
 
     # it is abmtime(model) time
     # schedule
+    @debug "run_scheduler!"
     run_scheduler!(sim, model, model.sim.resource)
 
     # ask users to do their staff
+    @debug "users activities"
     for id in abmscheduler(model)(model)
         # here `agent_step2!` may delete agents, so we check for it manually
         hasid(model, id) || continue
         #agent_step2!(model[id], model)
-        # println("model_step!: User: $(model[id].id) $(model[id].pos[1])")
+        @debug "model_step!: User: $(model[id].id) $(model[id].pos[1])"
         user_step!(sim, model, model[id])
     end
 
     # schedule
+    @debug "run_scheduler!"
     run_scheduler!(sim, model, model.sim.resource)
 
     # more stats
+    @debug "model_step_stats!"
     model_step_stats!(sim)
 
     # model extra step
+    @debug "model_extra_step"
     isnothing(sim.model_extra_step) == false && sim.model_extra_step(sim, model)
 end
 
@@ -697,6 +702,9 @@ function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     else
         end_criteria = nsteps
     end
+
+    @debug "run!(sim::Simulation; nsteps=$(nsteps), run_till_no_jobs=$(run_till_no_jobs)):
+        Running the model..."
 
     sim.adf, sim.mdf = run!(
         model, end_criteria;

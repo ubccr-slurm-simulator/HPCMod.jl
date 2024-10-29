@@ -41,6 +41,7 @@ function jobs_replay_on_resource(job_trace;
     rng=Random.Xoshiro(123)
     )
     # Init simulation, seed a random generator
+    @debug "jobs_replay_on_resource"
     sim = Simulation(; rng)
     sim.workload_done_check_freq = workload_done_check_freq
     add_resource!(sim; nodes, scheduler_backfill)
