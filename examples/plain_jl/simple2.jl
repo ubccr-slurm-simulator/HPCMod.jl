@@ -9,7 +9,7 @@ using Random
 using HPCMod
 
 function run_sim(;scheduler_backfill=true, rng=Random.Xoshiro(123))
-    sim = SimulationSimple(;rng)
+    sim = Simulation(;rng)
 
     add_resource!(
         sim; 

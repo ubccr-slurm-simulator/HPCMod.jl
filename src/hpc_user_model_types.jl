@@ -111,15 +111,13 @@ mutable struct HPCResourceStats
     node_occupancy_by_task::DataFrame
 end
 
-
-
 """
-HPCResourceSimple - HPC Resource
+HPCResource - HPC Resource
 struct to track resource occupiency and jobs
 
 $(TYPEDFIELDS)
 """
-mutable struct HPCResourceSimple
+mutable struct HPCResource
     "number of nodes"
     nodes::Int64
     "array with job id using that node"
@@ -142,7 +140,7 @@ mutable struct HPCResourceSimple
 end
 
 
-mutable struct SimulationSimple
+mutable struct Simulation
     id::Int64
     timeunits_per_day::Int64
     timeunit::Period
@@ -157,7 +155,7 @@ mutable struct SimulationSimple
     last_user_id::Int64
     users_list::Vector{User}
     users_dict::Dict{Int64,User}
-    resource::Union{HPCResourceSimple,Nothing}
+    resource::Union{HPCResource,Nothing}
     space::Union{GridSpace,Nothing}
     model::Union{StandardABM,Nothing}
     rng::AbstractRNG

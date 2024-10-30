@@ -9,7 +9,7 @@ using HPCMod
 # All users with UserPreferred task split schema
 ################################################################################
 # Init simulation, seed a random generator
-sim1 = SimulationSimple(;rng=Random.Xoshiro(123))
+sim1 = Simulation(;rng=Random.Xoshiro(123))
 sim1.workload_done_check_freq = 1
 # Add HPC resource
 add_resource!(
@@ -43,7 +43,7 @@ println(sim1.resource.stats.node_occupancy_by_task[:,:])
 # Last user with AdaptiveFactor task split schema
 ################################################################################
 # Init simulation, seed a random generator
-sim1 = SimulationSimple(;rng=Random.Xoshiro(123))
+sim1 = Simulation(;rng=Random.Xoshiro(123))
 sim1.workload_done_check_freq = 1
 # Add HPC resource
 add_resource!(

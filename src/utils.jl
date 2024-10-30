@@ -3,7 +3,7 @@ using Plots
 """
 add_users_and_jobs_from_dataframe for jobs replay (no tasks involved)
 """
-function add_users_and_jobs_from_dataframe(sim::SimulationSimple, df::DataFrame)
+function add_users_and_jobs_from_dataframe(sim::Simulation, df::DataFrame)
     # check "submit_time", "user_id", "nodes", "walltime" presence
     ["submit_time", "user_id", "nodes", "walltime"] ⊈ names(df) && error("not all column in DataFrame")
 
@@ -42,7 +42,7 @@ function jobs_replay_on_resource(job_trace;
     )
     # Init simulation, seed a random generator
     @debug "jobs_replay_on_resource"
-    sim = SimulationSimple(; rng)
+    sim = Simulation(; rng)
     sim.workload_done_check_freq = workload_done_check_freq
     add_resource!(sim; nodes, scheduler_backfill)
 
@@ -56,7 +56,7 @@ end
 rectangle(x1, y1, x2, y2) = Shape([(x1,y1),(x1,y2),(x2,y2),(x2,y1),(x1,y1),(x2,y1),(x2,y2),(x1,y2)])
 
 function plot_node_util(
-    sim::SimulationSimple;
+    sim::Simulation;
     ticks_step=1.0,
     annotation_pointsize=12
     )

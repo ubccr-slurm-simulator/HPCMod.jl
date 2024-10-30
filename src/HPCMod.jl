@@ -4,8 +4,8 @@ export CompTask
 export BatchJob
 #export Base.isless
 export User
-export HPCResourceSimple
-export SimulationSimple
+export HPCResource
+export Simulation
 
 export TaskSplitSchema, UserPreferred, AdaptiveFactor, JobReplay
 
@@ -16,7 +16,7 @@ include("hpc_user_model_types.jl")
 # export BatchJob
 # export User
 export add_resource!
-# export SimulationSimple
+# export Simulation
 # export task_split_maxnode_maxtime
 # export task_split
 # export submit_job

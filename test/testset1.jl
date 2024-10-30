@@ -4,7 +4,7 @@ using DataFrames
 using Dates
 
 @testset "BatchJob Comparison" begin
-    sim = SimulationSimple()
+    sim = Simulation()
     add_resource!(sim)
     user = User(sim)
     task = user.inividual_jobs_task
@@ -63,7 +63,7 @@ end
 end
 
 @testset "DateTime Conversion " begin
-    sim = SimulationSimple()
+    sim = Simulation()
     @test get_datetime(sim, 2)==DateTime(2024,1,1,2,0,0)
     @test get_datetime(sim, 25)==DateTime(2024,1,2,1,0,0)
     @test get_datetime(sim, 24*366+2)==DateTime(2025,1,1,2,0,0)

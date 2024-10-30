@@ -7,7 +7,7 @@ using Agents
 using HPCMod
 
 # Init simulation, seed a random generator
-sim = SimulationSimple(;rng=Random.Xoshiro(123))
+sim = Simulation(;rng=Random.Xoshiro(123))
 sim.workload_done_check_freq = 1
 # Add HPC resource
 add_resource!(
