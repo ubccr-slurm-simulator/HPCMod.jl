@@ -21,3 +21,11 @@ import Pkg
 Pkg.add("Pluto")
 import Pluto
 Pluto.run()
+
+
+
+Randomly() = Randomly(Int[])
+function (sched::Randomly)(model::ABM)
+    get_ids!(sched.ids, model)
+    shuffle!(abmrng(model), sched.ids)
+end

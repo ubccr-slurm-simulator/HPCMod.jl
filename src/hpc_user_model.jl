@@ -12,7 +12,7 @@ using Distributions
 using Printf
 
 
-used_nodes(r::HPCResource) = sum(r.node_used_by_job .!= 0)
+used_nodes(r::HPCResourceSimple) = sum(r.node_used_by_job .!= 0)
 used_nodes(m::StandardABM) = used_nodes(m.sim.resource)
 
 get_nodename(node_id) = @sprintf("N%04d", node_id)
@@ -22,7 +22,7 @@ if user_id is specified it is up to programmer to add it to user.tasks_to_do (or
     task_id=0 will set task_id=-user_id for job's replay purposes
 """
 function CompTask(
-    sim::Simulation,
+    sim::SimulationSimple,
     user_id::Int64;
     task_id::Int64=-1,
     nodetime::Int64=72,
@@ -72,7 +72,7 @@ end
 Create a BatchJob for task
 """
 function BatchJob(
-    sim::Simulation, task::CompTask;
+    sim::SimulationSimple, task::CompTask;
     nodes::Int64=1,
     walltime::Int64=1,
     submit_time::Int64=-1,
@@ -104,7 +104,7 @@ end
 Create new user, add it to model
 """
 function User(
-    sim::Simulation;
+    sim::SimulationSimple;
     max_concurrent_tasks::Int64=4,
     max_nodes_per_job::Int64=-1,
     max_time_per_job::Int64=-1,
@@ -144,19 +144,19 @@ function HPCResourceStats()
 end
 
 
-function add_resource!(sim::Simulation;
+function add_resource!(sim::SimulationSimple;
     nodes=10,
     max_nodes_per_job=4,
     max_time_per_job=24 * 3,
     scheduler_fifo=true,
     scheduler_backfill=true
-)::HPCResource
+)::HPCResourceSimple
     sim.space !== nothing && error("sim.space already initialized")
     sim.resource !== nothing && error("sim.resource already initialized")
     nodes <= 0 && error("nodes should be positive!")
 
     sim.space = GridSpace((nodes,); periodic=false, metric=:manhattan)
-    sim.resource = HPCResource(
+    sim.resource = HPCResourceSimple(
         nodes,
         zeros(Int64, nodes),
         fill(Int64(-1), nodes),
@@ -191,14 +191,14 @@ end
 """
 get datetime from simulation step
 """
-function get_datetime(sim::Simulation, step::Int64)
+function get_datetime(sim::SimulationSimple, step::Int64)
     sim.timeunit * step + sim.init_datetime
 end
 
 """
 get simulation step from datetime
 """
-function get_step(sim::Simulation, datetime::DateTime)
+function get_step(sim::SimulationSimple, datetime::DateTime)
     (datetime - sim.init_datetime) ÷ sim.timeunit
 end
 
@@ -207,14 +207,14 @@ end
 """
 get nearby simulation step from datetime
 """
-function get_round_step(sim::Simulation, datetime::DateTime)
+function get_round_step(sim::SimulationSimple, datetime::DateTime)
     round(datetime - sim.init_datetime, sim.timeunit) ÷ sim.timeunit
 end
 
 """
-Simulation constructor
+SimulationSimple constructor
 """
-function Simulation(
+function SimulationSimple(
     ;
     id::Int64=1,
     timeunit::Period=Hour(1),
@@ -222,12 +222,12 @@ function Simulation(
     rng::AbstractRNG=Random.default_rng(123),
     user_extra_step::Union{Function,Nothing}=nothing,
     model_extra_step::Union{Function,Nothing}=nothing
-)::Simulation
+)::SimulationSimple
     cur_datetime::DateTime = init_datetime
 
     timeunits_per_day = Day(1) ÷ timeunit
 
-    sim = Simulation(
+    sim = SimulationSimple(
         id,
         timeunits_per_day,
         timeunit,
@@ -263,7 +263,7 @@ end
 CompTask Split Strategy use user prefered values.
 Constrained by max nodes allowed and max walltime by Resource and User
 """
-function task_split_user_prefered_values!(sim::Simulation, task::CompTask; user::Union{User,Nothing}=nothing)::BatchJob
+function task_split_user_prefered_values!(sim::SimulationSimple, task::CompTask; user::Union{User,Nothing}=nothing)::BatchJob
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
     max_nodes_per_job = sim.resource.max_nodes_per_job
     max_time_per_job = sim.resource.max_time_per_job
@@ -308,7 +308,7 @@ The nodes can be in range adaptive_factor_nodes[1]*nodes_prefered to adaptive_fa
 Similarly walltime can be in range adaptive_factor_walltime[1]*walltime_prefered to adaptive_factor_walltime[2]*walltime_prefered depending on available walltime.
 Constrained by max nodes allowed and max walltime by Resource and User
 """
-function task_split_adaptive_factor!(sim::Simulation, task::CompTask;
+function task_split_adaptive_factor!(sim::SimulationSimple, task::CompTask;
     user::Union{User,Nothing}=nothing,
     adaptive_factor_nodes=[0.5, 2.0],
     adaptive_factor_walltime=[0.25, 4.0]
@@ -402,7 +402,7 @@ task_split! = Dict(
 #    task_split_maxnode_maxtime!
 #]
 
-function submit_job(sim::Simulation, model::StandardABM, resource::HPCResource, job::BatchJob)
+function submit_job(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple, job::BatchJob)
     if job.submit_time < 0
         job.submit_time = abmtime(model)
     elseif job.submit_time != abmtime(model)
@@ -417,18 +417,18 @@ function submit_job(sim::Simulation, model::StandardABM, resource::HPCResource, 
     return
 end
 
-function generate_thinktime_zero(sim::Simulation, user::User)::Int64
+function generate_thinktime_zero(sim::SimulationSimple, user::User)::Int64
     0
 end
 
-function generate_thinktime_gamma(sim::Simulation, user::User)::Int64
+function generate_thinktime_gamma(sim::SimulationSimple, user::User)::Int64
     shape = 0.23743230
     scale = 1.0 / 0.05508324
     gamma = Gamma(shape, scale)
     round(Int64, rand(sim.rng, gamma))
 end
 
-function user_step!(sim::Simulation, model::StandardABM, user::User)
+function user_step!(sim::SimulationSimple, model::StandardABM, user::User)
     if length(user.inividual_jobs) == 0 && length(user.tasks_to_do) == 0 && length(user.tasks_active) == 0
         return
     end
@@ -491,7 +491,7 @@ end
 """
 free nodes are good to fit this job
 """
-function place_job!(model::StandardABM, resource::HPCResource, job_position_at_queue::Int64)
+function place_job!(model::StandardABM, resource::HPCResourceSimple, job_position_at_queue::Int64)
     job = popat!(resource.queue, job_position_at_queue)
     resource.executing[job.id] = job
     run_till = abmtime(model) + job.walltime
@@ -515,7 +515,7 @@ function place_job!(model::StandardABM, resource::HPCResource, job_position_at_q
     job
 end
 
-function run_scheduler_fifo!(sim::Simulation, model::StandardABM, resource::HPCResource)
+function run_scheduler_fifo!(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple)
     while length(resource.queue) > 0
         job = resource.queue[1]
         nodes_available = resource.nodes - used_nodes(resource)
@@ -529,7 +529,7 @@ function run_scheduler_fifo!(sim::Simulation, model::StandardABM, resource::HPCR
     end
 end
 
-function run_scheduler_backfill!(sim::Simulation, model::StandardABM, resource::HPCResource)
+function run_scheduler_backfill!(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple)
     while length(resource.queue) > 0
         nodes_free = resource.nodes - used_nodes(resource)
         #println("Time: $(abmtime(model)) free nodes: $(nodes_free) queue $(length(resource.queue))")
@@ -561,7 +561,7 @@ function run_scheduler_backfill!(sim::Simulation, model::StandardABM, resource::
 end
 
 
-function run_scheduler!(sim::Simulation, model::StandardABM, resource::HPCResource)
+function run_scheduler!(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple)
     # FIFO
     if resource.scheduler_fifo
         run_scheduler_fifo!(sim, model, resource)
@@ -577,7 +577,7 @@ Check for finished jobs
     the convention is that job run all the way till current time, 
     excluding current time.
 """
-function check_finished_job!(sim::Simulation, model::StandardABM, resource::HPCResource)
+function check_finished_job!(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple)
     cur_time = abmtime(model)
     for i in 1:resource.nodes
         if resource.node_released_at[i] >= 0 && resource.node_released_at[i] <= cur_time
@@ -600,7 +600,7 @@ function check_finished_job!(sim::Simulation, model::StandardABM, resource::HPCR
     return
 end
 
-function model_step_stats!(sim::Simulation)
+function model_step_stats!(sim::SimulationSimple)
     abmtime(sim.model) % sim.resource.stats.calc_freq != 0 && return
 
     ncol(sim.resource.stats.node_occupancy_by_user) == 0 && error("sim.resource.stats.node_occupancy_by_user was not initialized!")
@@ -633,7 +633,7 @@ function show_rng_state(rng1::AbstractRNG,rng2::AbstractRNG,rng3::AbstractRNG)
 end
 
 function model_step!(model::StandardABM)
-    sim::Simulation = model.sim
+    sim::SimulationSimple = model.sim
     sim.cur_datetime = get_datetime(sim, abmtime(model))
     # @debug "model_step! cur_datetime: $(sim.cur_datetime)\n"
     # it is right before abmtime(model) time
@@ -680,7 +680,7 @@ function is_workload_done(model, s)
 end
 
 
-function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
+function run!(sim::SimulationSimple; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     model::StandardABM = sim.model
     # Users Statistics
     adata0 = [
@@ -704,7 +704,7 @@ function run!(sim::Simulation; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
         end_criteria = nsteps
     end
 
-    @debug "run!(sim::Simulation; nsteps=$(nsteps), run_till_no_jobs=$(run_till_no_jobs)):
+    @debug "run!(sim::SimulationSimple; nsteps=$(nsteps), run_till_no_jobs=$(run_till_no_jobs)):
         Running the model..."
 
     sim.adf, sim.mdf = run!(

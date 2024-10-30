@@ -46,3 +46,36 @@ jupyter notebook list
 ```bash
 julia --project=.. ./simple1.jl
 ```
+
+
+# Debug logging
+
+```jl
+    #init_log_level = Logging.min_enabled_level(Logging.current_logger())
+    #Logging.disable_logging(Logging.Debug - 1)
+    #Logging.disable_logging
+    ENV["JULIA_DEBUG"] = "all"
+
+    @info "ref_5jobs_1user_unordered START"
+    @debug "ref_5jobs_1user_unordered (debug)"
+
+    #Logging.disable_logging(init_log_level)
+    @info "ref_5jobs_1user_unordered END"
+    delete!(ENV, "JULIA_DEBUG")
+```
+
+
+
+```
+
+    timeunits_per_day = sim.timeunits_per_day
+    mdf = @chain sim.mdf begin
+        @filter(used_nodes > 0)
+        @summarise begin
+            mean_used_nodes = mean(used_nodes)
+            sd_used_nodes = std(used_nodes)
+            max_time = maximum(time)
+        end
+        @mutate max_days = max_time / !!timeunits_per_day 
+    end
+```
