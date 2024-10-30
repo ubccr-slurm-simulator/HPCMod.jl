@@ -1,3 +1,7 @@
+# HPCMod Example
+# Simple example with step by step creation of HPC Resource, users and their compute tasks
+# Running simulation and results viewing
+
 using Random
 using Agents
 using HPCMod
