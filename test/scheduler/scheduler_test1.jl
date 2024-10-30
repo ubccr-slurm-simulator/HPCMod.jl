@@ -70,7 +70,7 @@ ref_5jobs_on_4nodes_with_backfiller = [
 
 @testset "5 jobs by 1 user" begin
     # Init simulation, seed a random generator
-    sim = Simulation(; rng=Random.Xoshiro(123))
+    sim = SimulationSimple(; rng=Random.Xoshiro(123))
     sim.workload_done_check_freq = 1
     # Add HPC resource
     add_resource!(sim; scheduler_backfill=false)

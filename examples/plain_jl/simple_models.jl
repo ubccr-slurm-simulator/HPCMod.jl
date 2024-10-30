@@ -22,7 +22,7 @@ function simulate(
 	rng=Random.Xoshiro(123),
 	arrive_same_time=true)
 	# Init simulation, seed a random generator
-	sim = Simulation(;rng=rng)
+	sim = SimulationSimple(;rng=rng)
 	sim.workload_done_check_freq = 1
 	# Add HPC resource
 	add_resource!(

@@ -8,9 +8,9 @@ using Distributions
 using Plots
 
 # Init simulation, seed a random generator
-sim = Simulation(;rng=Random.Xoshiro(123))
+sim = SimulationSimple(;rng=Random.Xoshiro(123))
 
-function generate_think_time(sim::Simulation, user::User)
+function generate_think_time(sim::SimulationSimple, user::User)
     shape=0.23743230	
     scale = 1.0/0.05508324	
     gamma = Gamma(shape, scale)
