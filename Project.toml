@@ -1,7 +1,7 @@
 name = "HPCMod"
 uuid = "fd7ff580-634a-4fbd-a744-0f3e7cd44420"
 authors = ["Nikolay Simakov"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 Agents = "46ada45e-f475-11e8-01d0-f70cc89e6671"
@@ -31,7 +31,7 @@ Distributions = "0.25"
 DocStringExtensions = "0.9"
 Plots = "1.40"
 Revise = "3.6"
-Statistics = "0.4"
+Statistics = "1.10"
 Tidier = "1.4"
 
 [extras]
