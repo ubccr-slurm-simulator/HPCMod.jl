@@ -58,7 +58,7 @@ a batch job represent a manageble portion of CompTask
 
 $(TYPEDFIELDS)
 """
-mutable struct BatchJob
+mutable struct BatchJobSimple
     "Job id - smaller id does not nessesary guaranee ealier submition"
     id::Int64
     task::CompTask
@@ -75,7 +75,7 @@ end
 """
 Comparison in sense of which were submitted earlier
 """
-Base.isless(j1::BatchJob, j2::BatchJob) = j1.submit_time < j2.submit_time
+Base.isless(j1::BatchJobSimple, j2::BatchJobSimple) = j1.submit_time < j2.submit_time
 
 
 """
@@ -93,11 +93,11 @@ $(TYPEDFIELDS)
     tasks_active::Vector{CompTask}
     tasks_done::Vector{CompTask}
     "finished jobs for User to process"
-    jobs_to_process::Vector{BatchJob}
+    jobs_to_process::Vector{BatchJobSimple}
     "CompTask for inidividual jobs"
     inividual_jobs_task::CompTask
     "jobs which are not bind to task"
-    inividual_jobs::SortedSet{BatchJob}
+    inividual_jobs::SortedSet{BatchJobSimple}
     thinktime_generator::Function
 end
 
@@ -129,11 +129,11 @@ mutable struct HPCResourceSimple
     "same as node_released_at but sorted"
     node_released_at_sorted::Vector{Int64}
     "Jobs in queue"
-    queue::Vector{BatchJob}
+    queue::Vector{BatchJobSimple}
     "Jobs currently running"
-    executing::Dict{Int64,BatchJob}
+    executing::Dict{Int64,BatchJobSimple}
     "Jobs finished"
-    history::Vector{BatchJob}
+    history::Vector{BatchJobSimple}
     max_nodes_per_job::Int64
     max_time_per_job::Int64
     scheduler_fifo::Bool
@@ -152,8 +152,8 @@ mutable struct SimulationSimple
     task_list::Vector{CompTask}
     task_dict::Dict{Int64,CompTask}
     last_job_id::Int64
-    jobs_list::Vector{BatchJob}
-    jobs_dict::Dict{Int64,BatchJob}
+    jobs_list::Vector{BatchJobSimple}
+    jobs_dict::Dict{Int64,BatchJobSimple}
     last_user_id::Int64
     users_list::Vector{User}
     users_dict::Dict{Int64,User}
@@ -175,3 +175,7 @@ mutable struct SimulationSimple
     model_extra_step::Union{Function,Nothing}
     workload_done_check_freq::Int64
 end
+
+
+
+

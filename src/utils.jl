@@ -23,7 +23,7 @@ function add_users_and_jobs_from_dataframe(sim::SimulationSimple, df::DataFrame)
 
         m_df = filter(:user_id => ==(user_id), df)
         for row in eachrow(m_df)
-            BatchJob(sim, user.inividual_jobs_task;
+            BatchJobSimple(sim, user.inividual_jobs_task;
                 nodes=row.nodes, walltime=row.walltime,
                 submit_time=row.submit_time,
                 job_id=has_job_id ? row.job_id : -1,

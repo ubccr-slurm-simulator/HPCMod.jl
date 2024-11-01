@@ -69,16 +69,16 @@ function CompTask(
 end
 
 """
-Create a BatchJob for task
+Create a BatchJobSimple for task
 """
-function BatchJob(
+function BatchJobSimple(
     sim::SimulationSimple, task::CompTask;
     nodes::Int64=1,
     walltime::Int64=1,
     submit_time::Int64=-1,
     job_id::Int64=-1,
     jobs_list::Union{SortedSet,Nothing}=nothing
-)::BatchJob
+)::BatchJobSimple
 
     if job_id == -1
         sim.last_job_id += 1
@@ -91,7 +91,7 @@ function BatchJob(
         submit_time = sim.model !== nothing ? submit_time = abmtime(sim.model) : 0
     end
 
-    push!(sim.jobs_list, BatchJob(sim.last_job_id, task, nodes, walltime, submit_time, -1, -1, NotScheduled, []))
+    push!(sim.jobs_list, BatchJobSimple(sim.last_job_id, task, nodes, walltime, submit_time, -1, -1, NotScheduled, []))
     sim.jobs_dict[sim.last_job_id] = sim.jobs_list[end]
 
     if jobs_list !== nothing
@@ -124,9 +124,9 @@ function User(
         max_nodes_per_job,
         max_time_per_job,
         SortedSet{CompTask}(), Vector{CompTask}(), Vector{CompTask}(),
-        Vector{BatchJob}(),
+        Vector{BatchJobSimple}(),
         CompTask(sim, sim.last_user_id; nodetime=-1, task_split_schema=JobReplay, submit_time=0, max_concurrent_jobs=1_000_000, inividual_jobs_task=true),
-        SortedSet{BatchJob}(),
+        SortedSet{BatchJobSimple}(),
         generate_thinktime_zero
     )
 
@@ -161,7 +161,7 @@ function add_resource!(sim::SimulationSimple;
         zeros(Int64, nodes),
         fill(Int64(-1), nodes),
         fill(Int64(-1), nodes),
-        [], Dict{Int64,BatchJob}(), [],
+        [], Dict{Int64,BatchJobSimple}(), [],
         max_nodes_per_job, max_time_per_job,
         scheduler_fifo, scheduler_backfill,
         HPCResourceStats()
@@ -234,7 +234,7 @@ function SimulationSimple(
         cur_datetime::DateTime,
         init_datetime::DateTime,
         0, Vector{CompTask}(), Dict{Int64,CompTask}(),
-        0, Vector{BatchJob}(), Dict{Int64,BatchJob}(),
+        0, Vector{BatchJobSimple}(), Dict{Int64,BatchJobSimple}(),
         0, Vector{User}(), Dict{Int64,User}(),
         nothing,
         nothing,
@@ -263,7 +263,7 @@ end
 CompTask Split Strategy use user prefered values.
 Constrained by max nodes allowed and max walltime by Resource and User
 """
-function task_split_user_prefered_values!(sim::SimulationSimple, task::CompTask; user::Union{User,Nothing}=nothing)::BatchJob
+function task_split_user_prefered_values!(sim::SimulationSimple, task::CompTask; user::Union{User,Nothing}=nothing)::BatchJobSimple
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
     max_nodes_per_job = sim.resource.max_nodes_per_job
     max_time_per_job = sim.resource.max_time_per_job
@@ -299,7 +299,7 @@ function task_split_user_prefered_values!(sim::SimulationSimple, task::CompTask;
         walltime = max_time_per_job
     end
 
-    BatchJob(sim, task; nodes, walltime)
+    BatchJobSimple(sim, task; nodes, walltime)
 end
 
 """
@@ -312,7 +312,7 @@ function task_split_adaptive_factor!(sim::SimulationSimple, task::CompTask;
     user::Union{User,Nothing}=nothing,
     adaptive_factor_nodes=[0.5, 2.0],
     adaptive_factor_walltime=[0.25, 4.0]
-)::BatchJob
+)::BatchJobSimple
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
 
     if user === nothing
@@ -392,7 +392,7 @@ function task_split_adaptive_factor!(sim::SimulationSimple, task::CompTask;
         walltime = max_time_per_job
     end
 
-    BatchJob(sim, task; nodes, walltime)
+    BatchJobSimple(sim, task; nodes, walltime)
 end
 
 task_split! = Dict(
@@ -402,7 +402,7 @@ task_split! = Dict(
 #    task_split_maxnode_maxtime!
 #]
 
-function submit_job(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple, job::BatchJob)
+function submit_job(sim::SimulationSimple, model::StandardABM, resource::HPCResourceSimple, job::BatchJobSimple)
     if job.submit_time < 0
         job.submit_time = abmtime(model)
     elseif job.submit_time != abmtime(model)

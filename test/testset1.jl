@@ -3,18 +3,18 @@ using Random
 using DataFrames
 using Dates
 
-@testset "BatchJob Comparison" begin
+@testset "BatchJobSimple Comparison" begin
     sim = SimulationSimple()
     add_resource!(sim)
     user = User(sim)
     task = user.inividual_jobs_task
     jobs = user.inividual_jobs
 
-    job1 = BatchJob(sim, task; nodes=2, walltime=10, submit_time=12, jobs_list=jobs)
-    job2 = BatchJob(sim, task; nodes=2, walltime=10, submit_time=15, jobs_list=jobs)
-    job3 = BatchJob(sim, task; nodes=2, walltime=10, submit_time=10, jobs_list=jobs)
-    job4 = BatchJob(sim, task; nodes=2, walltime=10, submit_time=14, jobs_list=jobs)
-    job5 = BatchJob(sim, task; nodes=2, walltime=10, submit_time=14, jobs_list=jobs)
+    job1 = BatchJobSimple(sim, task; nodes=2, walltime=10, submit_time=12, jobs_list=jobs)
+    job2 = BatchJobSimple(sim, task; nodes=2, walltime=10, submit_time=15, jobs_list=jobs)
+    job3 = BatchJobSimple(sim, task; nodes=2, walltime=10, submit_time=10, jobs_list=jobs)
+    job4 = BatchJobSimple(sim, task; nodes=2, walltime=10, submit_time=14, jobs_list=jobs)
+    job5 = BatchJobSimple(sim, task; nodes=2, walltime=10, submit_time=14, jobs_list=jobs)
 
     # compare by submit_time
     @test job1 < job2

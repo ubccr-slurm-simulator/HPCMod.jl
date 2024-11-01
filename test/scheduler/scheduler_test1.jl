@@ -80,11 +80,11 @@ ref_5jobs_on_4nodes_with_backfiller = [
     jobs = user.inividual_jobs
 
     # add jobs
-    job1 = BatchJob(sim, task; nodes=3, walltime=4, submit_time=4, jobs_list=jobs)
-    job2 = BatchJob(sim, task; nodes=2, walltime=4, submit_time=7, jobs_list=jobs)
-    job3 = BatchJob(sim, task; nodes=2, walltime=4, submit_time=2, jobs_list=jobs)
-    job4 = BatchJob(sim, task; nodes=2, walltime=4, submit_time=6, jobs_list=jobs)
-    job5 = BatchJob(sim, task; nodes=2, walltime=4, submit_time=6, jobs_list=jobs)
+    job1 = BatchJobSimple(sim, task; nodes=3, walltime=4, submit_time=4, jobs_list=jobs)
+    job2 = BatchJobSimple(sim, task; nodes=2, walltime=4, submit_time=7, jobs_list=jobs)
+    job3 = BatchJobSimple(sim, task; nodes=2, walltime=4, submit_time=2, jobs_list=jobs)
+    job4 = BatchJobSimple(sim, task; nodes=2, walltime=4, submit_time=6, jobs_list=jobs)
+    job5 = BatchJobSimple(sim, task; nodes=2, walltime=4, submit_time=6, jobs_list=jobs)
 
     adf, mdf = run!(sim; run_till_no_jobs=true)
 

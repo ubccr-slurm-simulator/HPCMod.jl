@@ -1,7 +1,7 @@
 module HPCMod
 
 export CompTask
-export BatchJob
+export BatchJobSimple
 #export Base.isless
 export User
 export HPCResourceSimple
@@ -13,7 +13,7 @@ include("hpc_user_model_types.jl")
 
 
 # export CompTask
-# export BatchJob
+# export BatchJobSimple
 # export User
 export add_resource!
 # export SimulationSimple
@@ -44,5 +44,8 @@ export add_users_and_jobs_from_dataframe
 export jobs_replay_on_resource
 export plot_node_util
 include("utils.jl")
+
+#export add_nodes
+include("hpc_resource.jl")
 
 end
