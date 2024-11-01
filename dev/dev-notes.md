@@ -79,3 +79,31 @@ julia --project=.. ./simple1.jl
         @mutate max_days = max_time / !!timeunits_per_day 
     end
 ```
+
+
+# Constructor
+
+```jl
+
+MyType=Partition
+
+for field in fieldnames(MyType)
+    println("$field::Union{Missing,$(fieldtype(MyType, field))}=missing,")
+end
+
+for field in fieldnames(MyType)
+    print("$field, ")
+end
+println()
+for field in fieldnames(MyType)
+    println("$field=$field,")
+end
+
+
+```
+
+
+
+```
+
+```
