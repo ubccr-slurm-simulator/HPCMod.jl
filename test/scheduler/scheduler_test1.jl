@@ -75,7 +75,7 @@ ref_5jobs_on_4nodes_with_backfiller = [
     # Add HPC resource
     add_resource!(sim; scheduler_backfill=false)
     # add users
-    user = User(sim)
+    user = UserSimple(sim)
     task = user.inividual_jobs_task
     jobs = user.inividual_jobs
 

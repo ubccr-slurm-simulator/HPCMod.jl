@@ -6,7 +6,7 @@ using Dates
 @testset "BatchJobSimple Comparison" begin
     sim = SimulationSimple()
     add_resource!(sim)
-    user = User(sim)
+    user = UserSimple(sim)
     task = user.inividual_jobs_task
     jobs = user.inividual_jobs
 

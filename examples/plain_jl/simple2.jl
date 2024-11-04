@@ -19,7 +19,7 @@ function run_sim(;scheduler_backfill=true, rng=Random.Xoshiro(123))
         scheduler_backfill)
 
     for n in 1:18
-        user = User(
+        user = UserSimple(
             sim;
             max_concurrent_tasks=2
             )
@@ -30,7 +30,7 @@ function run_sim(;scheduler_backfill=true, rng=Random.Xoshiro(123))
     end
 
     for n in 1:2
-        user = User(
+        user = UserSimple(
             sim;
             max_concurrent_tasks=2
             )

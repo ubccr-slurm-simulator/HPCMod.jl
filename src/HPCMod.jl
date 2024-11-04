@@ -3,7 +3,7 @@ module HPCMod
 export CompTask
 export BatchJobSimple
 #export Base.isless
-export User
+export UserSimple
 export HPCResourceSimple
 export SimulationSimple
 
@@ -14,7 +14,7 @@ include("hpc_user_model_types.jl")
 
 # export CompTask
 # export BatchJobSimple
-# export User
+# export UserSimple
 export add_resource!
 # export SimulationSimple
 # export task_split_maxnode_maxtime

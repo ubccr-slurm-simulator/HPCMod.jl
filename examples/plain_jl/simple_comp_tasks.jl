@@ -21,7 +21,7 @@ add_resource!(
 
 # add four users, last is using AdaptiveFactor
 for user_id in 1:4
-    user = User(
+    user = UserSimple(
         sim1;
         max_concurrent_tasks=2
         )
@@ -55,7 +55,7 @@ add_resource!(
 
 # add four users, last is using AdaptiveFactor
 for user_id in 1:4
-    user = User(
+    user = UserSimple(
         sim1;
         max_concurrent_tasks=2
         )

@@ -79,10 +79,10 @@ Base.isless(j1::BatchJobSimple, j2::BatchJobSimple) = j1.submit_time < j2.submit
 
 
 """
-User
+UserSimple
 $(TYPEDFIELDS)
 """
-@agent struct User(GridAgent{1})
+@agent struct UserSimple(GridAgent{1})
     "max concurrent tasks"
     max_concurrent_tasks::Int64
     "max number of nodes per job, -1 - there is no constrain"
@@ -155,8 +155,8 @@ mutable struct SimulationSimple
     jobs_list::Vector{BatchJobSimple}
     jobs_dict::Dict{Int64,BatchJobSimple}
     last_user_id::Int64
-    users_list::Vector{User}
-    users_dict::Dict{Int64,User}
+    users_list::Vector{UserSimple}
+    users_dict::Dict{Int64,UserSimple}
     resource::Union{HPCResourceSimple,Nothing}
     space::Union{GridSpace,Nothing}
     model::Union{StandardABM,Nothing}

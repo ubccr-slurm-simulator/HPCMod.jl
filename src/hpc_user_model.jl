@@ -103,13 +103,13 @@ end
 """
 Create new user, add it to model
 """
-function User(
+function UserSimple(
     sim::SimulationSimple;
     max_concurrent_tasks::Int64=4,
     max_nodes_per_job::Int64=-1,
     max_time_per_job::Int64=-1,
     user_id::Int64=-1
-)::User
+)::UserSimple
     if user_id == -1
         sim.last_user_id += 1
     else
@@ -117,7 +117,7 @@ function User(
         sim.last_user_id in keys(sim.users_dict) && error("Such user (user_id=$(user_id)) already exists")
     end
 
-    user = User(
+    user = UserSimple(
         sim.last_user_id,
         (1,),
         max_concurrent_tasks,
@@ -235,7 +235,7 @@ function SimulationSimple(
         init_datetime::DateTime,
         0, Vector{CompTask}(), Dict{Int64,CompTask}(),
         0, Vector{BatchJobSimple}(), Dict{Int64,BatchJobSimple}(),
-        0, Vector{User}(), Dict{Int64,User}(),
+        0, Vector{UserSimple}(), Dict{Int64,UserSimple}(),
         nothing,
         nothing,
         nothing,
@@ -247,7 +247,7 @@ function SimulationSimple(
     )
 
     sim.model = StandardABM(
-        User,
+        UserSimple,
         sim.space;
         model_step!,
         properties=Dict(
@@ -263,7 +263,7 @@ end
 CompTask Split Strategy use user prefered values.
 Constrained by max nodes allowed and max walltime by Resource and User
 """
-function task_split_user_prefered_values!(sim::SimulationSimple, task::CompTask; user::Union{User,Nothing}=nothing)::BatchJobSimple
+function task_split_user_prefered_values!(sim::SimulationSimple, task::CompTask; user::Union{UserSimple,Nothing}=nothing)::BatchJobSimple
     task.nodetime_left_unplanned <= 0 && error("can not make job for this task nodetime<=0")
     max_nodes_per_job = sim.resource.max_nodes_per_job
     max_time_per_job = sim.resource.max_time_per_job
@@ -306,10 +306,10 @@ end
 CompTask Split Strategy use AdaptiveFactor scheme.
 The nodes can be in range adaptive_factor_nodes[1]*nodes_prefered to adaptive_factor_nodes[2]*nodes_prefered depending on available nodes.
 Similarly walltime can be in range adaptive_factor_walltime[1]*walltime_prefered to adaptive_factor_walltime[2]*walltime_prefered depending on available walltime.
-Constrained by max nodes allowed and max walltime by Resource and User
+Constrained by max nodes allowed and max walltime by Resource and UserSimple
 """
 function task_split_adaptive_factor!(sim::SimulationSimple, task::CompTask;
-    user::Union{User,Nothing}=nothing,
+    user::Union{UserSimple,Nothing}=nothing,
     adaptive_factor_nodes=[0.5, 2.0],
     adaptive_factor_walltime=[0.25, 4.0]
 )::BatchJobSimple
@@ -417,18 +417,18 @@ function submit_job(sim::SimulationSimple, model::StandardABM, resource::HPCReso
     return
 end
 
-function generate_thinktime_zero(sim::SimulationSimple, user::User)::Int64
+function generate_thinktime_zero(sim::SimulationSimple, user::UserSimple)::Int64
     0
 end
 
-function generate_thinktime_gamma(sim::SimulationSimple, user::User)::Int64
+function generate_thinktime_gamma(sim::SimulationSimple, user::UserSimple)::Int64
     shape = 0.23743230
     scale = 1.0 / 0.05508324
     gamma = Gamma(shape, scale)
     round(Int64, rand(sim.rng, gamma))
 end
 
-function user_step!(sim::SimulationSimple, model::StandardABM, user::User)
+function user_step!(sim::SimulationSimple, model::StandardABM, user::UserSimple)
     if length(user.inividual_jobs) == 0 && length(user.tasks_to_do) == 0 && length(user.tasks_active) == 0
         return
     end
@@ -461,7 +461,7 @@ function user_step!(sim::SimulationSimple, model::StandardABM, user::User)
     resize!(user.jobs_to_process, 0)
 
     # users extra step
-    isnothing(sim.user_extra_step) == false && sim.user_extra_step(sim, model, User)
+    isnothing(sim.user_extra_step) == false && sim.user_extra_step(sim, model, UserSimple)
 
     # activate new tasks
     while length(user.tasks_to_do) > 0 && length(user.tasks_active) < user.max_concurrent_tasks && first(user.tasks_to_do).submit_time <= abmtime(model)

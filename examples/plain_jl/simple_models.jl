@@ -34,7 +34,7 @@ function simulate(
 	
 	# add four users
 	for user_id in 1:4
-	    user = User(
+	    user = UserSimple(
 	        sim;
 	        max_concurrent_tasks=2
 	        )

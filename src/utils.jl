@@ -16,7 +16,7 @@ function add_users_and_jobs_from_dataframe(sim::SimulationSimple, df::DataFrame)
     has_job_id = "job_id" in names(df)
     for user_id in users_list
         #println(user_id)
-        user = User(
+        user = UserSimple(
             sim;
             user_id
         )
