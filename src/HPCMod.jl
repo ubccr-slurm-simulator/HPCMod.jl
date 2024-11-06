@@ -45,7 +45,23 @@ export jobs_replay_on_resource
 export plot_node_util
 include("utils.jl")
 
-#export add_nodes
-include("hpc_resource.jl")
+# Slurm like resource
+include("hpc_resource_sl_types.jl")
+
+
+export NodeFeatureId, GRESType, GRESModel, NodeId, PartitionId
+export QoSId, AccountId, UserId, JobId, ResourceId
+
+export TIME_INFINITE, GRES_MODEL_ANY
+
+export NodeState, PartitionState, NodeSharing, HPCEventType
+
+
+export ComputeNodeSL, PartitionSL, QoSSL, AccountSL, UserSL, BatchJobSL, JobOnResourceSL, HPCEventSL, HPCResourceSL, SimulationSL
+
+include("hpc_resource_sl.jl")
+
+export ComputeNodeSL, model_step_sl!, SimulationSL, get_ids_from_str_ids, add_resource!
+export add_nodes!, add_partition!, add_qos!, add_account!, add_user!, add_job!, run!
 
 end
