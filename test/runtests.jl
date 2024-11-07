@@ -3,6 +3,8 @@ using Test
 @testset "HPCMod.jl" begin
     include("testset1.jl")
 
+    #Util
+    include("./test_utils.jl")
     # Scheduler
     @testset "Scheduler tests " begin
         include("./scheduler/scheduler_test1.jl")

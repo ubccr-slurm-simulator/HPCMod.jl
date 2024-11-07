@@ -53,6 +53,20 @@ function jobs_replay_on_resource(job_trace;
     sim
 end
 
+function duration_format(t::Millisecond)
+    left = Dates.value(t)
+    days = left ÷ (24*3600000)
+    left = left % (24*3600000)
+    hours = left ÷ 3600000
+    left = left % 3600000
+    minutes  = left ÷ 60000
+    left = left % 60000
+    seconds = left ÷ 1000
+    millisecond = left % 1000
+    "$(days)-$(lpad(hours, 2, "0")):$(lpad(minutes, 2, "0")):$(lpad(seconds, 2, "0")).$(lpad(millisecond, 3, "0"))"
+end
+
+
 rectangle(x1, y1, x2, y2) = Shape([(x1,y1),(x1,y2),(x2,y2),(x2,y1),(x1,y1),(x2,y1),(x2,y2),(x1,y2)])
 
 function plot_node_util(

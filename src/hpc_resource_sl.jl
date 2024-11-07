@@ -39,7 +39,9 @@ function SimulationSL(;
         nothing,
         nothing,
         user_extra_step, model_extra_step,
+        Vector{GRESType}(),
         Dict{String, GRESType}(),
+        Vector{GRESModel}(),
         Dict{String, GRESModel}()
         )
     
@@ -59,11 +61,13 @@ end
 "
 Get vector of integer ids from the vector of string ids using id dict
 "
-function get_ids_from_str_ids(str_ids::Vector{String}, id_dict::Dict{String, Int})
+function get_ids_from_str_ids(str_ids::Vector{String}, id_dict::Dict{String, Int}, id_vec::Vector{String})
     ids = Vector{Int64}()
     for str_id in str_ids
         if !haskey(id_dict, str_id)
-            id_dict[str_id] = length(id_dict) + 1
+            new_id = length(id_vec) + 1
+            push!(id_vec, str_id)
+            id_dict[str_id] = new_id
         end
         push!(ids, id_dict[str_id])
     end
@@ -80,10 +84,12 @@ function add_resource!(sim::SimulationSL; name::String="HPCResourceSL")
         Vector{QoSSL}(), Dict{String, QoSId}(), 0,
         Vector{AccountSL}(), Dict{String, AccountId}(),
         Vector{UserAccountSL}(), Dict{String, UserAccountId}(),
+        Vector{NodeFeatureId}(),
         Dict{String, NodeFeatureId}(),
         Vector{JobOnResourceSL}(),
         Dict{JobId,JobOnResourceSL}(),
         Vector{BatchJobSL}(),
+        0,
         0
         ))
     sim.resource_id[name] = resource_id
@@ -101,7 +107,6 @@ function add_nodes!(
     nodesname_list::Vector{String};
     sockets::Union{Missing, Int64}=missing,
     cores_per_socket::Union{Missing, Int64}=missing,
-    threads_per_core::Int64=1,
     memory::Union{Missing, Int64}=missing,
     features::Vector{String}=Vector{String}(),
     gres::Vector{String}=Vector{String}(),
@@ -111,37 +116,44 @@ function add_nodes!(
     # cpus, cpus_per_node, nodes
     ismissing(cores_per_socket) && throw("cores_per_socket should be set")
     ismissing(sockets) && throw("sockets should be set")
-    cpus = threads_per_core * cores_per_socket * sockets
+    cpus = cores_per_socket * sockets
 
     ismissing(memory) && throw("memory should be set")
     length(gres_model)==0 && length(gres)>0 && (gres_model = [v*"-ModelA" for v in gres])
 
     # Features Ids
-    features_ids=get_ids_from_str_ids(features, resource.NodeFeatures)
+    features_ids=get_ids_from_str_ids(features, resource.NodeFeatures_id, resource.NodeFeatures)
     # GRES
-    gres_ids=get_ids_from_str_ids(gres, sim.GRESTypes)
-    gres_model_ids = get_ids_from_str_ids(gres_model, sim.GRESModels)
+    gres_ids=get_ids_from_str_ids(gres, sim.GRESTypes_id, sim.GRESTypes)
+    gres_model_ids = get_ids_from_str_ids(gres_model, sim.GRESModels_id, sim.GRESModels)
 
     for name in nodesname_list
         # Check name uniqueness
         haskey(resource.node_id, name) && throw("Node $(name) already exists")
         # Add
         node_id = length(resource.node) + 1
+        job_slots = cpus
         push!(resource.node, ComputeNodeSL(
             node_id,
             cores_per_socket, 
-            memory, 
-            cpus, 
-            cpus, 
+            cpus,
             copy(features_ids), 
             copy(gres_ids), 
-            copy(gres_model_ids), 
-            Vector{JobId}(), 
-            name, 
+            copy(gres_model_ids),
+            name,
             state, 
-            memory, 
+            memory,
             sockets, 
-            threads_per_core))
+            job_slots,
+            fill(NOT_USED_BY_JOB, job_slots),
+            fill(DATETIME_UNSET, job_slots),
+            cpus,
+            fill(0, job_slots),
+            memory,
+            fill(0, job_slots),
+            fill(NOT_USED_BY_JOB, length(gres_ids)),
+            fill(DATETIME_UNSET, length(gres_ids))
+            ))
         resource.node_id[name] = node_id
     end
 
@@ -292,11 +304,11 @@ function add_job!(
     cpus % nodes != 0 && throw("cpus should be multiple of nodes")
 
 
-    features_id::Vector{NodeFeatureId} = [resource.NodeFeatures[feature] for feature in features]
-    gres_per_node_id::Vector{GRESType} = [sim.GRESTypes[gres] for gres in gres_per_node]
+    features_id::Vector{NodeFeatureId} = [resource.NodeFeatures_id[feature] for feature in features]
+    gres_per_node_id::Vector{GRESType} = [sim.GRESTypes_id[gres] for gres in gres_per_node]
     if length(gres_per_node_id) > 0
         if length(gres_per_node_id) == length(gres_model_per_node)
-            gres_model_per_node_id::Vector{GRESModel} = [sim.GRESModels[gres] for gres in gres_model_per_node]
+            gres_model_per_node_id::Vector{GRESModel} = [sim.GRESModels_id[gres] for gres in gres_model_per_node]
         elseif length(gres_model_per_node)==0
             gres_model_per_node_id=fill(GRES_MODEL_ANY, length(gres_per_node_id))
         else
@@ -315,7 +327,7 @@ function add_job!(
         cpus, cpus_per_node, nodes, 
         gres_per_node_id, gres_model_per_node_id,
         mem_per_cpu, node_sharing, features_id, req_walltime, 
-        sim_walltime, submit_time, priority, start_time, end_time, walltime, nodes_list)
+        sim_walltime, submit_time, priority, JOBSTATUS_UNKNOWN, start_time, end_time, walltime, nodes_list)
 
 
     push!(sim.user[user_id].events_list, HPCEventSL(submit_time, dt, SUBMIT_JOB, job))
@@ -326,19 +338,22 @@ end
 
 function is_workload_done_sl(model, s)
     sim = getproperty(model, :sim)
-    return false
-    # s % sim.workload_done_check_freq != 0 && return false
+    s % sim.workload_done_check_freq != 0 && return false
 
-    # length(sim.resource.queue) > 0 && return false
-    # length(sim.resource.executing) > 0 && return false
+    for resource in sim.resource
+        length(resource.queue)==0 && length(resource.executing)==0 && continue
+        
+        length(resource.queue) > 0 && sum((jobonres.job.status==JOBSTATUS_INQUEUE for jobonres in resource.queue)) > 0 && return false
+        length(resource.executing) > 0 && sum((jobonres.job.status==JOBSTATUS_RUNNING for (job_id,jobonres) in resource.executing)) > 0 && return false
+    end
+    
+    for user in sim.user
+        user.next_event == NO_NEXT_EVENT && continue
+        user.next_event > length(user.events_list) && continue
+        return false
+    end
 
-    # for user in sim.users_list
-    #     length(user.inividual_jobs) > 0 && return false
-    #     length(user.tasks_active) > 0 && return false
-    #     length(user.tasks_to_do) > 0 && return false
-    # end
-
-    # return true
+    return true
 end
 
 """
@@ -377,6 +392,7 @@ function submit_job(sim::SimulationSL, model::StandardABM, resource::HPCResource
 
     push!(resource.queue, JobOnResourceSL(job))
 
+    job.status = JOBSTATUS_INQUEUE
     # push!(job.task.current_jobs, job.id)
 
     return
@@ -385,7 +401,7 @@ end
 function find_runnable_nodes!(
     sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL)
     
-    length(jobonres.gres_used)!=resource.gres_max && (jobonres.gres_used = fill(false, resource.gres_max))
+    length(jobonres.gres_counted)!=resource.gres_max && (jobonres.gres_counted = fill(false, resource.gres_max))
     length(jobonres.runnable_nodes_bool)==0 && (jobonres.runnable_nodes_bool = fill(false, length(resource.node)))
 
     job = jobonres.job
@@ -394,7 +410,7 @@ function find_runnable_nodes!(
         jobonres.runnable_nodes_bool[node_id] = false
         # cpus_per_node::Int64
         job.cpus_per_node > node.cpus && continue
-        job.mem_per_cpu * job.cpus_per_node > node.real_memory && continue
+        job.mem_per_cpu * job.cpus_per_node > node.memory && continue
 
         has_required_features = true
         for feature in job.features
@@ -408,29 +424,29 @@ function find_runnable_nodes!(
 
         # GRES match
         if length(job.gres_per_node) >0
-            fill!(jobonres.gres_used, false)
+            fill!(jobonres.gres_counted, false)
 
             length(job.gres_per_node) > length(node.gres) && continue
 
             for ijob in 1:length(job.gres_per_node)
                 if job.gres_model_per_node[ijob]==GRES_MODEL_ANY
-                    for inode in 1:length(node.gres)
-                        if job.gres_per_node[ijob] == node.gres[inode] && jobonres.gres_used[inode]==false
-                            jobonres.gres_used[inode] = true
+                    for igres in 1:length(node.gres)
+                        if job.gres_per_node[ijob] == node.gres[igres] && jobonres.gres_counted[igres]==false
+                            jobonres.gres_counted[igres] = true
                             break
                         end
                     end
                 else
-                    for inode in 1:length(node.gres)
-                        if job.gres_per_node[ijob] == node.gres[inode] && job.gres_model_per_node[ijob]==node.gres_model[inode] && jobonres.gres_used[inode]==false
-                            jobonres.gres_used[inode] = true
+                    for igres in 1:length(node.gres)
+                        if job.gres_per_node[ijob] == node.gres[igres] && job.gres_model_per_node[ijob]==node.gres_model[igres] && jobonres.gres_counted[igres]==false
+                            jobonres.gres_counted[igres] = true
                             break
                         end
                     end
                 end
             end
 
-            if sum(jobonres.gres_used)!=length(job.gres_per_node)
+            if sum(jobonres.gres_counted)!=length(job.gres_per_node)
                 continue
             end
         end
@@ -450,6 +466,175 @@ function find_runnable_nodes!(
 end
 
 "
+return true if found nodes
+"
+function find_currently_runnable_nodes!(
+    sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL)
+    length(jobonres.runnable_nodes) == 0 && find_runnable_nodes!(sim, resource, jobonres)
+    job = jobonres.job
+
+    for (inode,node_id) in enumerate(jobonres.runnable_nodes)
+        node = resource.node[node_id]
+        
+        jobonres.currently_runnable_nodes[inode] = false
+        # cpus_per_node::Int64
+        job.cpus_per_node > node.cpus_free && continue
+        job.mem_per_cpu * job.cpus_per_node > node.memory_free && continue
+
+        has_required_features = true
+        for feature in job.features
+            if feature ∉ node.features
+                has_required_features=false
+                break
+            end
+        end
+
+        !has_required_features && continue
+
+        # GRES match
+        if length(job.gres_per_node) >0
+            fill!(jobonres.gres_counted, false)
+
+            length(job.gres_per_node) > length(node.gres) && continue
+
+            for ijob in 1:length(job.gres_per_node)
+                if job.gres_model_per_node[ijob]==GRES_MODEL_ANY
+                    for igres in 1:length(node.gres)
+                        if job.gres_per_node[ijob] == node.gres[igres] && jobonres.gres_counted[igres]==false && node.gres_used[igres]==NOT_USED_BY_JOB
+                            jobonres.gres_counted[igres] = true
+                            break
+                        end
+                    end
+                else
+                    for igres in 1:length(node.gres)
+                        if job.gres_per_node[ijob] == node.gres[igres] && job.gres_model_per_node[ijob]==node.gres_model[igres] && jobonres.gres_counted[igres]==false && node.gres_used[igres]==NOT_USED_BY_JOB
+                            jobonres.gres_counted[igres] = true
+                            break
+                        end
+                    end
+                end
+            end
+
+            if sum(jobonres.gres_counted)!=length(job.gres_per_node)
+                continue
+            end
+        end
+
+        jobonres.currently_runnable_nodes[inode] = true
+    end
+
+    if sum(jobonres.currently_runnable_nodes) < job.nodes
+        # not enough resources
+        @debug "Job $(job.id) has following currently runnabe nodes: \
+        $([resource.node[node_id].name for (node_id,avail) in zip(jobonres.runnable_nodes,jobonres.currently_runnable_nodes) if avail])"
+
+        return false
+    end
+
+    @debug "Job $(job.id) has following currently runnabe nodes: \
+        $([resource.node[node_id].name for (node_id,avail) in zip(jobonres.runnable_nodes,jobonres.currently_runnable_nodes) if avail])"
+
+    return true
+end
+
+function place_job!(
+    sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL, node_ids::Vector{NodeId})
+    job = jobonres.job
+
+    # planned release time
+    release_time = sim.cur_datetime + job.req_walltime
+
+    for node_id in node_ids
+        node = resource.node[node_id]
+        jobslot = findfirst(==(NOT_USED_BY_JOB), node.jobs_on_node)
+        node.jobs_on_node[jobslot] = job.id
+        node.jobs_release_time[jobslot] = release_time
+
+        # allocate cpu
+        node.cpus_free -= job.cpus_per_node
+        node.cpu_used[jobslot] = job.cpus_per_node
+
+        # allocate memory
+        node.memory_free -= job.cpus_per_node * job.mem_per_cpu
+        node.memory_used[jobslot] = job.cpus_per_node * job.mem_per_cpu
+
+        # allocate gres
+        for ijob in 1:length(job.gres_per_node)
+            if job.gres_model_per_node[ijob]==GRES_MODEL_ANY
+                for igres in 1:length(node.gres)
+                    if job.gres_per_node[ijob] == node.gres[igres]  && node.gres_used[igres]==NOT_USED_BY_JOB
+                        node.gres_used[igres] = job.id
+                        node.gres_release_time[igres] = release_time
+                        break
+                    end
+                end
+            else
+                for igres in 1:length(node.gres)
+                    if job.gres_per_node[ijob] == node.gres[igres] && job.gres_model_per_node[ijob]==node.gres_model[igres] && node.gres_used[igres]==NOT_USED_BY_JOB
+                        node.gres_used[igres] = job.id
+                        node.gres_release_time[igres] = release_time
+                        break
+                    end
+                end
+            end
+        end
+    end
+    @debug "Job $(jobonres.job.id) allocated on:  $([resource.node[node_id].name for node_id in node_ids])"
+
+    jobonres.job.start_time = sim.cur_datetime
+    jobonres.job.nodes_list = copy(node_ids)
+    jobonres.job.status = JOBSTATUS_RUNNING
+    resource.executing[jobonres.job.id] = jobonres
+    resource.cleanup_arrays += 1
+
+    return true
+end
+
+
+function finish_job!(
+    sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL)
+
+    job = jobonres.job
+
+    for node_id in job.nodes_list
+        node = resource.node[node_id]
+        jobslot = findfirst(==(job.id), node.jobs_on_node)
+        node.jobs_on_node[jobslot] = NOT_USED_BY_JOB
+        node.jobs_release_time[jobslot] = DATETIME_UNSET
+
+        # deallocate cpu
+        node.cpus_free += node.cpu_used[jobslot]
+        node.cpu_used[jobslot] = 0
+
+        # deallocate memory
+        node.memory_free += node.memory_used[jobslot]
+        node.memory_used[jobslot] = 0
+
+        # deallocate gres
+        for igres in 1:length(node.gres)
+            if node.gres_used[igres] == job.id
+                node.gres_used[igres] = NOT_USED_BY_JOB
+                node.gres_release_time[igres] = DATETIME_UNSET
+            end
+        end
+    end
+    @debug "Job $(jobonres.job.id) deallocated from:  $([resource.node[node_id].name for node_id in job.nodes_list])"
+
+    jobonres.job.end_time = sim.cur_datetime
+    jobonres.job.walltime = jobonres.job.end_time - jobonres.job.start_time
+    jobonres.job.status = JOBSTATUS_DONE
+    push!(resource.history, deepcopy(jobonres.job))
+
+    resource.cleanup_arrays += 1
+
+    return true
+
+end
+
+function cleanup_arrays!(sim::SimulationSL, resource::HPCResourceSL)
+
+end
+"
 Check that resource follows conventions
 "
 function check_resource(sim::SimulationSL, resource::HPCResourceSL)
@@ -461,9 +646,12 @@ function check_resource(sim::SimulationSL, resource::HPCResourceSL)
     errors_count > 0 && throw("Node.id should match index in resource.node vector") 
 end
 
-function attempt_to_allocate(sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL)::Bool
-    length(jobonres.runnable_nodes) == 0 && find_runnable_nodes!(sim, resource, jobonres)
-    
+function attempt_to_allocate!(sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL)::Bool
+    if find_currently_runnable_nodes!(sim, resource, jobonres)
+        return place_job!(
+            sim, resource, jobonres, 
+            [node_id for (node_id,avail) in zip(jobonres.runnable_nodes,jobonres.currently_runnable_nodes) if avail][1:jobonres.job.nodes])
+    end
     return false
 end
 
@@ -481,7 +669,7 @@ end
 function user_step!(sim::SimulationSL, model::StandardABM, user::UserSL)
     
     if user.next_event != NO_NEXT_EVENT
-        while user.events_list[user.next_event].when <= sim.cur_datetime && user.next_event <= length(user.events_list)
+        while user.next_event <= length(user.events_list) && user.events_list[user.next_event].when <= sim.cur_datetime
             if user.events_list[user.next_event].event_type == SUBMIT_JOB
                 submit_job(
                     sim, model, 
@@ -554,37 +742,14 @@ function user_step!(sim::SimulationSL, model::StandardABM, user::UserSL)
     return
 end
 
-"""
-free nodes are good to fit this job
-"""
-function place_job!(model::StandardABM, resource::HPCResourceSL, job_position_at_queue::Int64)
-    # job = popat!(resource.queue, job_position_at_queue)
-    # resource.executing[job.id] = job
-    # run_till = abmtime(model) + job.walltime
-    # job.start_time = abmtime(model)
-    # node_count = 0
-
-    # for node_id in 1:resource.nodes
-    #     if resource.node_used_by_job[node_id] == 0
-    #         resource.node_used_by_job[node_id] = job.id
-    #         resource.node_released_at[node_id] = run_till
-    #         node_count += 1
-
-    #         push!(job.nodes_list, node_id)
-
-    #         if node_count == job.nodes
-    #             break
-    #         end
-    #     end
-    # end
-    # resource.node_released_at_sorted = sort(resource.node_released_at)
-    # job
-end
-
 function run_scheduler_fifo!(sim::SimulationSL, resource::HPCResourceSL)
-    while length(resource.queue) > 0
-        if !attempt_to_allocate(sim, resource, resource.queue[1])
+    job_scheduled = 0
+    for jobonres in resource.queue
+        jobonres.job.status != JOBSTATUS_INQUEUE && continue
+        if !attempt_to_allocate!(sim, resource, jobonres)
             break
+        else
+            job_scheduled += 1
         end
     end
 end
@@ -623,18 +788,9 @@ end
 
 function run_scheduler!(sim::SimulationSL, resource::HPCResourceSL)
     length(resource.queue) == 0 && return
-    
-    println("job in resource.queue")
-    for job in resource.queue
-        println("$(job.id) $(job.priority)")
-    end
-    # Sort
-    sort!(resource.queue, by = x -> x.priority, order=Base.Order.Reverse)
 
-    println("job in resource.queue")
-    for job in resource.queue
-        println("$(job.id) $(job.priority)")
-    end
+    # Sort
+    sort!(resource.queue, by = x -> x.job.priority, order=Base.Order.Reverse)
     
     #if resource.scheduler_fifo
         run_scheduler_fifo!(sim, resource)
@@ -651,25 +807,28 @@ Check for finished jobs
     excluding current time.
 """
 function check_finished_job!(sim::SimulationSL, resource::HPCResourceSL)
-    # cur_time = abmtime(model)
-    # for i in 1:resource.nodes
-    #     if resource.node_released_at[i] >= 0 && resource.node_released_at[i] <= cur_time
-    #         job_id = resource.node_used_by_job[i]
-    #         job = pop!(resource.executing, job_id)
-    #         job.end_time = abmtime(model)
-    #         user = model[job.task.user_id]
-    #         # clear from nodes
-    #         for i2 in i:resource.nodes
-    #             if resource.node_used_by_job[i2] == job.id
-    #                 resource.node_used_by_job[i2] = 0
-    #                 resource.node_released_at[i2] = -1
-    #             end
-    #         end
-    #         push!(resource.history, job)
-    #         push!(user.jobs_to_process, job)
-    #     end
-    # end
-    # resource.node_released_at_sorted = sort(resource.node_released_at)
+    cur_time = sim.cur_datetime
+
+    # jobs which finished on themselves
+    for (job_id,jobonres) in resource.executing
+        jobonres.job.sim_walltime < Millisecond(0) && continue
+        jobonres.job.status != JOBSTATUS_RUNNING && continue
+        jobonres.job.start_time + jobonres.job.sim_walltime > cur_time && continue
+        
+
+        finish_job!(sim, resource, jobonres)
+    end
+
+    # jobs which finished by reaching req_walltime
+    for (job_id,jobonres) in resource.executing
+        jobonres.job.sim_walltime >= Millisecond(0) && continue
+        jobonres.job.status != JOBSTATUS_RUNNING && continue
+        jobonres.job.start_time + jobonres.job.req_walltime > cur_time && continue
+        
+
+        finish_job!(sim, resource, jobonres)
+    end
+
     return
 end
 
@@ -722,6 +881,9 @@ function model_step_sl!(model::StandardABM)
     # schedule
     run_scheduler!(sim, sim.resource[1])
 
+    # cleanup_arrays
+    sim.resource[1].cleanup_arrays > 0 && cleanup_arrays!(sim, sim.resource[1])
+
     # more stats
     model_step_stats!(sim)
 
@@ -767,3 +929,57 @@ function run!(sim::SimulationSL; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     sim.adf, sim.mdf
 end
 
+function show_queue(sim::SimulationSL, resource::HPCResourceSL)
+    println("JOBSTATUS_RUNNING")
+    println("job.id nodes runtime")
+    for (job_id,jobonres) in resource.executing
+        jobonres.job.status != JOBSTATUS_RUNNING && continue
+
+        nodes = (length(jobonres.job.nodes_list)==0) ? "NA" : join([resource.node[i].name for i in jobonres.job.nodes_list],",")
+        
+        runtime = "NA"
+        if jobonres.job.status == JOBSTATUS_RUNNING
+            runtime = duration_format(sim.cur_datetime - jobonres.job.start_time)
+        end
+        println("$(jobonres.job.id) $(nodes) $(runtime)")
+    end
+    println("JOBSTATUS_INQUEUE")
+    println("job.id priority waittime")
+    for jobonres in resource.queue
+        jobonres.job.status != JOBSTATUS_INQUEUE && continue
+        waittime = duration_format(sim.cur_datetime - jobonres.job.submit_time)
+        println("$(jobonres.job.id) $(jobonres.job.priority) $(waittime)")
+    end
+end
+
+function gres_str(sim::SimulationSL, resource::HPCResourceSL, gres_type::Vector{GRESType}, gres_model::Vector{GRESModel})
+    if length(gres_model) == 0
+        sids = [sim.GRESTypes[tid] for tid in gres_type]
+    else
+        sids = [sim.GRESTypes[tid]* ( (mid == GRES_MODEL_ANY) ? "" : ":$(sim.GRESModels[mid])") for (tid, mid) in zip(gres_type, gres_model)]
+    end
+    d = Dict{String, Int}()
+    for s in sids
+        !haskey(d, s) && (d[s] = 0)
+        d[s] += 1 
+    end
+    usids = unique(sids)
+    join([(d[s]==1) ? s : "$(s):$(d[s])" for s in usids],",")
+end
+
+function show_history(sim::SimulationSL, resource::HPCResourceSL)
+    println("JOBSTATUS_DONE")
+    println("job.id cpus nodes runtime gres nodes_list")
+    for job in resource.history
+        nodes_list = (length(job.nodes_list)==0) ? "NA" : join([resource.node[i].name for i in job.nodes_list],",")
+        
+        walltime = "NA"
+        if job.status == JOBSTATUS_DONE
+            walltime = duration_format(job.walltime)
+        end
+        
+        gres_list = (length(job.gres_per_node)==0) ? "NA" : gres_str(sim, resource, job.gres_per_node, job.gres_model_per_node)
+
+        println("$(job.id) $(job.cpus) $(job.nodes) $(job.submit_time) $(job.start_time) $(job.end_time) $(walltime) $(gres_list) $(nodes_list)")
+    end
+end

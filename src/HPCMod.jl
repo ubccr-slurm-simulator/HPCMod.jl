@@ -44,6 +44,7 @@ export add_users_and_jobs_from_dataframe
 export jobs_replay_on_resource
 export plot_node_util
 include("utils.jl")
+export duration_format
 
 # Slurm like resource
 include("hpc_resource_sl_types.jl")
@@ -54,7 +55,7 @@ export QoSId, AccountId, UserId, JobId, ResourceId
 
 export TIME_INFINITE, GRES_MODEL_ANY
 
-export NodeState, PartitionState, NodeSharing, HPCEventType
+export NodeState, PartitionState, NodeSharing, JobStatus, HPCEventType
 
 
 export ComputeNodeSL, PartitionSL, QoSSL, AccountSL, UserSL, BatchJobSL, JobOnResourceSL, HPCEventSL, HPCResourceSL, SimulationSL

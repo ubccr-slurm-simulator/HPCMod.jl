@@ -10,7 +10,10 @@ using DocStringExtensions
 
 using HPCMod
 
-sim = SimulationSL(init_datetime=DateTime(2024,11,1,0,0,0), timestep=Millisecond(1000))
+sim = SimulationSL(
+    init_datetime=DateTime(2024,11,1,0,0,0),
+    timestep=Millisecond(1000),
+    workload_done_check_freq=60)
 
 resource = add_resource!(sim; name="micro")
 #ComputeNodeSL()
@@ -133,217 +136,125 @@ add_user!(sim, resource, "user5", "account2")
 # (12, "b1") Procs=16 Feature=IB,CPU-N,BigMem  Memory=512000
 
 # 1 node with 16 cores per node
-job1001 = HPCMod.JobOnResourceSL(add_job!(
+job1001 = add_job!(
     sim, resource; dt=Millisecond(0*1000), job_id=1001, sim_walltime=Millisecond(0*1000), user="user5", req_walltime=Millisecond(60*1000), 
-    cpus=16, cpus_per_node=16, account="account2", partition="normal", qos="normal"))
-HPCMod.find_runnable_nodes!(sim,resource,job1001)
-job1001.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
-
+    cpus=16, cpus_per_node=16, account="account2", partition="normal", qos="normal")
 # 1 node with 1 cores per node with CPU-N
-job1002 = HPCMod.JobOnResourceSL(add_job!(
+job1002 = add_job!(
     sim, resource; dt=Millisecond(1*1000), job_id=1002, sim_walltime=Millisecond(-1*1000), user="user1", req_walltime=Millisecond(60*1000), 
-    cpus=1, cpus_per_node=1, account="account1", partition="normal", qos="normal", features=["CPU-N"], priority = 2))
-HPCMod.find_runnable_nodes!(sim,resource,job1002)
-job1002.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
-
+    cpus=1, cpus_per_node=1, account="account1", partition="normal", qos="normal", features=["CPU-N"], priority = 2)
 # Any 1 cpu 500GB each
-job1003 = HPCMod.JobOnResourceSL(add_job!(
+job1003 = add_job!(
     sim, resource; dt=Millisecond(2*1000), job_id=1003, sim_walltime=Millisecond(5*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=1, cpus_per_node=1, account="account2", partition="normal", qos="normal", mem_per_cpu=500000, priority = 3))
-HPCMod.find_runnable_nodes!(sim,resource,job1003)
-job1003.runnable_nodes==[12,]
-
+    cpus=1, cpus_per_node=1, account="account2", partition="normal", qos="normal", mem_per_cpu=500000, priority = 3)
 # Any 2 nodes with 12 cpus per node
-job1004 = HPCMod.JobOnResourceSL(add_job!(
+job1004 = add_job!(
     sim, resource; dt=Millisecond(16*1000), job_id=1004, sim_walltime=Millisecond(21*1000), user="user3", req_walltime=Millisecond(60*1000), 
-    cpus=24, cpus_per_node=12, account="account1", partition="normal", qos="normal"))
-HPCMod.find_runnable_nodes!(sim,resource,job1004)
-job1004.runnable_nodes==[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
+    cpus=24, cpus_per_node=12, account="account1", partition="normal", qos="normal")
 # 12 cpus, large MEM
-job1005 = HPCMod.JobOnResourceSL(add_job!(
+job1005 = add_job!(
     sim, resource; dt=Millisecond(19*1000), job_id=1005, sim_walltime=Millisecond(2*1000), user="user5", req_walltime=Millisecond(60*1000), 
-    cpus=12, cpus_per_node=12, account="account2", partition="normal", qos="normal", mem_per_cpu=500000÷12))
-HPCMod.find_runnable_nodes!(sim,resource,job1005)
-job1005.runnable_nodes==[12,]
-
+    cpus=12, cpus_per_node=12, account="account2", partition="normal", qos="normal", mem_per_cpu=500000÷12)
 # 4 Nodes with 16 cores
-job1006 = HPCMod.JobOnResourceSL(add_job!(
+job1006 = add_job!(
     sim, resource; dt=Millisecond(19*1000), job_id=1006, sim_walltime=Millisecond(9*1000), user="user3", req_walltime=Millisecond(60*1000), 
-    cpus=64, cpus_per_node=16, account="account1", partition="normal", qos="normal"))
-HPCMod.find_runnable_nodes!(sim,resource,job1006)
-job1006.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
-
+    cpus=64, cpus_per_node=16, account="account1", partition="normal", qos="normal")
 # 2 node of CPU-M
-job1007 = HPCMod.JobOnResourceSL(add_job!(
+job1007 = add_job!(
     sim, resource; dt=Millisecond(19*1000), job_id=1007, sim_walltime=Millisecond(-1*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=24, cpus_per_node=12, account="account2", partition="normal", qos="normal", features=["CPU-M"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1007)
-job1007.runnable_nodes==[1, 2, 3, 4]
-
+    cpus=24, cpus_per_node=12, account="account2", partition="normal", qos="normal", features=["CPU-M"])
 # one GPU 4 cores
-job1008 = HPCMod.JobOnResourceSL(add_job!(
+job1008 = add_job!(
     sim, resource; dt=Millisecond(22*1000), job_id=1008, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
     cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal",
-    gres_per_node=["GPU"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1008)
-job1008.runnable_nodes==[9, 10, 11]
-
+    gres_per_node=["GPU"])
 # 8 nodes
-job1009 = HPCMod.JobOnResourceSL(add_job!(
+job1009 = add_job!(
     sim, resource; dt=Millisecond(26*1000), job_id=1009, sim_walltime=Millisecond(2*1000), user="user1", req_walltime=Millisecond(60*1000), 
-    cpus=96, cpus_per_node=12, account="account1", partition="normal", qos="normal"))
-HPCMod.find_runnable_nodes!(sim,resource,job1009)
-job1009.runnable_nodes==[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
+    cpus=96, cpus_per_node=12, account="account1", partition="normal", qos="normal")
 # 1 node CPU-N
-job1010 = HPCMod.JobOnResourceSL(add_job!(
+job1010 = add_job!(
     sim, resource; dt=Millisecond(26*1000), job_id=1010, sim_walltime=Millisecond(0*1000), user="user5", req_walltime=Millisecond(60*1000), 
-    cpus=16, cpus_per_node=16, account="account2", partition="normal", qos="normal", features=["CPU-N"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1010)
-job1010.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
-
+    cpus=16, cpus_per_node=16, account="account2", partition="normal", qos="normal", features=["CPU-N"])
 # 1 node with 2 abitrary GPUS
-job1011 = HPCMod.JobOnResourceSL(add_job!(
+job1011 = add_job!(
     sim, resource; dt=Millisecond(29*1000), job_id=1011, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal", gres_per_node=["GPU","GPU"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1011)
-job1011.runnable_nodes==[9, 10, 11]
-
+    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal", gres_per_node=["GPU","GPU"])
 # 2 nodes with 2 gpu per node
-job1012 = HPCMod.JobOnResourceSL(add_job!(
+job1012 = add_job!(
     sim, resource; dt=Millisecond(32*1000), job_id=1012, sim_walltime=Millisecond(-1*1000), user="user5", req_walltime=Millisecond(60*1000), 
     cpus=16, cpus_per_node=16, account="account2", partition="normal", qos="normal",
-    gres_per_node=["GPU","GPU"], gres_model_per_node=["GPU-Model2","GPU-Model2"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1012)
-job1012.runnable_nodes==[10, 11]
-
+    gres_per_node=["GPU","GPU"], gres_model_per_node=["GPU-Model2","GPU-Model2"])
 # 
-job1013 = HPCMod.JobOnResourceSL(add_job!(
+job1013 = add_job!(
     sim, resource; dt=Millisecond(36*1000), job_id=1013, sim_walltime=Millisecond(0*1000), user="user2", req_walltime=Millisecond(60*1000), 
-    cpus=1, cpus_per_node=1, account="account1", partition="normal", qos="normal", mem_per_cpu=100000))
-HPCMod.find_runnable_nodes!(sim,resource,job1013)
-job1013.runnable_nodes==[10, 11, 12]
+    cpus=1, cpus_per_node=1, account="account1", partition="normal", qos="normal", mem_per_cpu=100000)
 #
-job1014 = HPCMod.JobOnResourceSL(add_job!(
+job1014 = add_job!(
     sim, resource; dt=Millisecond(36*1000), job_id=1014, sim_walltime=Millisecond(7*1000), user="user5", req_walltime=Millisecond(60*1000), 
-    cpus=32, cpus_per_node=16, account="account2", partition="normal", qos="normal", features=["CPU-N"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1014)
-job1014.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
+    cpus=32, cpus_per_node=16, account="account2", partition="normal", qos="normal", features=["CPU-N"])
 #
-job1015 = HPCMod.JobOnResourceSL(add_job!(
+job1015 = add_job!(
     sim, resource; dt=Millisecond(39*1000), job_id=1015, sim_walltime=Millisecond(18*1000), user="user2", req_walltime=Millisecond(60*1000), 
-    cpus=6, cpus_per_node=6, account="account1", partition="normal", qos="normal"))
-HPCMod.find_runnable_nodes!(sim,resource,job1015)
-job1015.runnable_nodes==[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    cpus=6, cpus_per_node=6, account="account1", partition="normal", qos="normal")
 # 
-job1016 = HPCMod.JobOnResourceSL(add_job!(
+job1016 = add_job!(
     sim, resource; dt=Millisecond(40*1000), job_id=1016, sim_walltime=Millisecond(25*1000), user="user1", req_walltime=Millisecond(60*1000), 
     cpus=8, cpus_per_node=8, account="account1", partition="normal", qos="normal", 
-    gres_per_node=["GPU","GPU"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1016)
-job1016.runnable_nodes==[9, 10, 11]
+    gres_per_node=["GPU","GPU"])
 #
-job1017 = HPCMod.JobOnResourceSL(add_job!(
+job1017 = add_job!(
     sim, resource; dt=Millisecond(42*1000), job_id=1017, sim_walltime=Millisecond(1*1000), user="user1", req_walltime=Millisecond(60*1000), 
-    cpus=64, cpus_per_node=16, account="account1", partition="normal", qos="normal", features=["CPU-N"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1017)
-job1017.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
+    cpus=64, cpus_per_node=16, account="account1", partition="normal", qos="normal", features=["CPU-N"])
 #
-job1018 = HPCMod.JobOnResourceSL(add_job!(
+job1018 = add_job!(
     sim, resource; dt=Millisecond(42*1000), job_id=1018, sim_walltime=Millisecond(0*1000), user="user3", req_walltime=Millisecond(60*1000), 
-    cpus=12, cpus_per_node=12, account="account1", partition="normal", qos="normal"))
-HPCMod.find_runnable_nodes!(sim,resource,job1018)
-job1018.runnable_nodes==[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    cpus=12, cpus_per_node=12, account="account1", partition="normal", qos="normal")
 #
-job1019 = HPCMod.JobOnResourceSL(add_job!(
+job1019 = add_job!(
     sim, resource; dt=Millisecond(43*1000), job_id=1019, sim_walltime=Millisecond(34*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=12, cpus_per_node=12, account="account2", partition="normal", qos="normal", gres_per_node=["GPU","GPU"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1019)
-job1019.runnable_nodes==[9, 10, 11]
+    cpus=12, cpus_per_node=12, account="account2", partition="normal", qos="normal", gres_per_node=["GPU","GPU"])
 #
-job1020 = HPCMod.JobOnResourceSL(add_job!(
+job1020 = add_job!(
     sim, resource; dt=Millisecond(43*1000), job_id=1020, sim_walltime=Millisecond(14*1000), user="user1", req_walltime=Millisecond(60*1000), 
-    cpus=1, cpus_per_node=1, account="account1", partition="normal", qos="normal", features=["CPU-N"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1020)
-job1020.runnable_nodes==[5, 6, 7, 8, 10, 11, 12]
-
-
-
-# Such job should not be possible
-job1007b = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(19*1000), job_id=1007, sim_walltime=Millisecond(-1*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=32, cpus_per_node=16, account="account2", partition="normal", qos="normal", features=["CPU-M"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1007b)
-job1007b.runnable_nodes==[]
-
-job1007c = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(19*1000), job_id=1007, sim_walltime=Millisecond(-1*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=24, cpus_per_node=12, account="account2", partition="normal", qos="normal", features=["CPU-M"], mem_per_cpu=500000÷12))
-HPCMod.find_runnable_nodes!(sim,resource,job1007c)
-job1007c.runnable_nodes==[]
-
-job1007d = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(19*1000), job_id=1007, sim_walltime=Millisecond(-1*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=240, cpus_per_node=12, account="account2", partition="normal", qos="normal", features=["CPU-M"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1007d)
-job1007d.runnable_nodes==[]
-
-# three GPU 4 cores
-job1008b = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(22*1000), job_id=1008, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal",
-    gres_per_node=["GPU","GPU","GPU"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1008b)
-job1008b.runnable_nodes==[]
-
-job1008b = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(22*1000), job_id=1008, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal",
-    gres_per_node=["GPU","GPU","GPU","GPU"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1008b)
-job1008b.runnable_nodes==[]
-
-job1008b = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(22*1000), job_id=1008, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal",
-    gres_per_node=["GPU","GPU","FPGA"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1008b)
-job1008b.runnable_nodes==[9]
-
-# 1 node CPU-N
-job1011b = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(29*1000), job_id=1011, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal", 
-    gres_per_node=["GPU","GPU"], gres_model_per_node=["GPU-Model1","GPU-Model1"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1011b)
-job1011b.runnable_nodes==[9]
-
-job1011b = HPCMod.JobOnResourceSL(add_job!(
-    sim, resource; dt=Millisecond(29*1000), job_id=1011, sim_walltime=Millisecond(0*1000), user="user4", req_walltime=Millisecond(60*1000), 
-    cpus=4, cpus_per_node=4, account="account2", partition="normal", qos="normal", 
-    gres_per_node=["GPU","GPU"], gres_model_per_node=["GPU-Model2","GPU-Model2"]))
-HPCMod.find_runnable_nodes!(sim,resource,job1011b)
-job1011b.runnable_nodes==[10,11]
+    cpus=1, cpus_per_node=1, account="account1", partition="normal", qos="normal", features=["CPU-N"])
 
 HPCMod.check_resource(sim, resource)
 
 #pprint(resource)
 #pprint(sim.user)
-#ENV["JULIA_DEBUG"] = "all"
+ENV["JULIA_DEBUG"] = "all"
 
+#
+#find_currently_runnable_nodes!(sim,resource,j)
 
-
-
-#jobonres1001 = HPCMod.JobOnResourceSL(job1001)
+#jobonres1001 = job1001)
 #HPCMod.find_runnable_nodes!(sim,resource,jobonres1001)
-#pprintln(jobonres1001)
+#jobonres=JobOnResourceSL(job1001)
+#HPCMod.attempt_to_allocate!(sim,resource,jobonres)
+
+#pprintln(jobonres)
+
+#delete!(ENV, "JULIA_DEBUG")
+#
 
 # @info "Test"
 # @debug "Test"
 
 #run!(sim; run_till_no_jobs=false, nsteps=5);
 
+run!(sim; run_till_no_jobs=true);
 
 
+delete!(ENV, "JULIA_DEBUG")
+
+#pprintln(resource)
+HPCMod.show_queue(sim, resource)
+HPCMod.show_history(sim, resource)
+
+#check_finished_job!(sim, resource)
+
+#pprintln(resource.executing)
+
+#*":"*GRESModels[mid]
 

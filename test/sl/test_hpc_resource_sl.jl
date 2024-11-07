@@ -324,4 +324,10 @@ using Logging
     @test job1011b.runnable_nodes==[10,11]
 
     HPCMod.check_resource(sim, resource)
+
+
+    # 
+    @test HPCMod.gres_str(sim, resource, resource.node[9].gres, resource.node[9].gres_model) == "GPU:GPU-Model1:2,FPGA:FPGA-Model1"
+    @test HPCMod.gres_str(sim, resource, [1,1], Vector{Int}()) == "GPU:2"
+    @test HPCMod.gres_str(sim, resource, [1,1], [0,0]) == "GPU:2"
 end

@@ -25,6 +25,8 @@ const GRES_MODEL_ANY::GRESModel = 0
 const NO_NEXT_EVENT::Int = 0
 const NO_USER_ACCOUNT::UserAccountId = 0
 const DATETIME_UNSET::DateTime=DateTime(0,1,1,0,0,0)
+const NOT_USED_BY_JOB::JobId = 0
+
 "
 NODE_STATE_UNKNOWN,	/* node's initial state, unknown */
 NODE_STATE_DOWN,	/* node in non-usable state */
@@ -55,15 +57,19 @@ NODE_STATE_END		/* last entry in table */
 #     * SHARED_FORCE to eliminate user control. "
 @enum NodeSharing NODE_SHARING_UNSET NODE_SHARING_OFF NODE_SHARING_SAMEUSER NODE_SHARING_ON
 
-
+@enum JobStatus JOBSTATUS_UNKNOWN JOBSTATUS_INQUEUE JOBSTATUS_RUNNING JOBSTATUS_DONE JOBSTATUS_CANCELED
 @enum HPCEventType SUBMIT_JOB
+
+"
+Used resources by job
+"
+#mutable struct JobOnNode
 
 # node_info_t?
 # Procs->CPUs?
 """
 largely adopted from Slurm's node_info_t
 """
-
 mutable struct ComputeNodeSL
     id::Int
     # char *arch;		" computer architecture "
@@ -77,10 +83,7 @@ mutable struct ComputeNodeSL
 	# uint16_t core_spec_cnt; " number of specialized cores on node "
 	# uint32_t cpu_bind;	" Default task binding "
 	# uint32_t cpu_load;	" CPU load * 100 "
-	" free memory in MiB "
-    free_mem::Int
-    " free CPUs"
-    free_cpus::Int
+
 	" configured count of cpus running on the node "
     cpus::Int
 	# uint16_t cpus_efctv;	" count of effective cpus on the node. i.e cpus minus specialized cpus"
@@ -98,8 +101,6 @@ mutable struct ComputeNodeSL
     " list of a node's generic resources models "
     gres_model::Vector{GRESModel}
 	# char *gres_drain;	" list of drained GRES "
-	" list of GRES in current use => Vector of GRES use status"
-    gres_used::Vector{JobId};	
 	# time_t last_busy;	" time node was last busy (i.e. no jobs) "
 	# char *mcs_label;	" mcs label if mcs plugin in use "
 	# uint64_t mem_spec_limit; " MB memory limit for specialization "
@@ -117,7 +118,7 @@ mutable struct ComputeNodeSL
 	# 			 * populated by scontrol "
 	# uint16_t port;		" TCP port number of the slurmd "
 	" configured MB of real memory on the node "
-    real_memory::Int
+    memory::Int
 	# char *comment;		" arbitrary comment "
 	# char *reason;		" reason for node being DOWN or DRAINING "
 	# time_t reason_time;	" Time stamp when reason was set, ignore if
@@ -135,13 +136,34 @@ mutable struct ComputeNodeSL
 	# time_t slurmd_start_time;" time of slurmd startup "
 	" total number of sockets per node "
     sockets::Int
-	" number of threads per core (node_info_t.threads_per_core)"
-    threads_per_core::Int
+	#" number of threads per core (node_info_t.threads_per_core)"
+    #threads_per_core::Int
 	# uint32_t tmp_disk;	" configured MB of total disk in TMP_FS "
 	# uint32_t weight;	" arbitrary priority of node for scheduling "
 	# char *tres_fmt_str;	" str representing configured TRES on node "
 	# char *version;		 " Slurm version number "
     #function ComputeNodeSL(;sockets=,threads=) 
+
+    "Max number of jobs on node, typically equal to cpus"
+    job_slots::Int
+    "Job on Node, we can have up to"
+    jobs_on_node::Vector{JobId}
+    jobs_release_time::Vector{DateTime}
+    " free CPUs"
+    cpus_free::Int
+    cpu_used::Vector{Int}
+    " free memory in MiB "
+    memory_free::Int
+    " cpu slots"
+    memory_used::Vector{Int}
+
+
+
+    " list of GRES in current use => Vector of GRES use status"
+    gres_used::Vector{JobId}
+    gres_release_time::Vector{DateTime}
+#    "work array"
+#    gres_used_wa::Vector{Bool}
 end
 
 
@@ -281,12 +303,14 @@ mutable struct BatchJobSL
 
     # task::CompTask
     req_walltime::Millisecond
+    "negative time means run untill scheduler kick out"
     sim_walltime::Millisecond
     " Planned submit_time, after submittion actual submit_time"
     submit_time::DateTime
 
     # 
     priority::Int64
+    status::JobStatus
     start_time::DateTime
     end_time::DateTime
     walltime::Millisecond
@@ -306,7 +330,7 @@ mutable struct JobOnResourceSL
     "Currently runnable nodes, indexing as in runnable_nodes"
     currently_runnable_nodes::Vector{Bool}
     "temporary array for runnable_nodes calculations"
-    gres_used::Vector{Bool}
+    gres_counted::Vector{Bool}
 
     job::BatchJobSL
 end
@@ -349,7 +373,8 @@ mutable struct HPCResourceSL
     account_id::Dict{String, AccountId}
     user_account::Vector{UserAccountSL}
     user_account_id::Dict{String, UserAccountId}
-    NodeFeatures::Dict{String, NodeFeatureId}
+    NodeFeatures::Vector{String}
+    NodeFeatures_id::Dict{String, NodeFeatureId}
 
     
     "Jobs in queue"
@@ -361,6 +386,9 @@ mutable struct HPCResourceSL
 
     "Maximal observed GRES in nodes (used for temporary arrays allocations)"
     gres_max::Int
+
+    "allocation/deallocation can be expansive so do it less often"
+    cleanup_arrays::Int
 end
 
 
@@ -418,8 +446,10 @@ mutable struct SimulationSL
     model_extra_step::Union{Function,Nothing}
 
     # 
-    GRESTypes::Dict{String, GRESType}
-    GRESModels::Dict{String, GRESModel}
+    GRESTypes::Vector{String}
+    GRESTypes_id::Dict{String, GRESType}
+    GRESModels::Vector{String}
+    GRESModels_id::Dict{String, GRESModel}
 
     
 end
