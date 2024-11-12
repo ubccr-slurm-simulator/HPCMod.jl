@@ -8,8 +8,8 @@ using Dates
 using DocStringExtensions
 
 const NodeFeatureId = Int
-const GRESType = Int
-const GRESModel = Int
+const ARESType = Int
+const ARESModel = Int
 const NodeId = Int
 const PartitionId = Int
 const QoSId = Int
@@ -20,11 +20,13 @@ const JobId = Int
 const ResourceId = Int
 
 const TIME_INFINITE::Int = 100*365*24*3600
-const GRES_MODEL_ANY::GRESModel = 0
+const GRES_MODEL_ANY::ARESModel = 0
 
 const NO_NEXT_EVENT::Int = 0
 const NO_USER_ACCOUNT::UserAccountId = 0
 const DATETIME_UNSET::DateTime=DateTime(0,1,1,0,0,0)
+# this unset to large date for proper sorting
+const DATETIME_UNSET_L::DateTime=DateTime(9999,1,1,0,0,0)
 const NOT_USED_BY_JOB::JobId = 0
 
 "
@@ -97,9 +99,9 @@ mutable struct ComputeNodeSL
 	# char *features_act;	" list of a node's current active features,
 	# 			 * Same as "features" if NULL "
 	" list of a node's generic resources types"
-    gres::Vector{GRESType}
+    gres::Vector{ARESType}
     " list of a node's generic resources models "
-    gres_model::Vector{GRESModel}
+    gres_model::Vector{ARESModel}
 	# char *gres_drain;	" list of drained GRES "
 	# time_t last_busy;	" time node was last busy (i.e. no jobs) "
 	# char *mcs_label;	" mcs label if mcs plugin in use "
@@ -149,9 +151,12 @@ mutable struct ComputeNodeSL
     "Job on Node, we can have up to"
     jobs_on_node::Vector{JobId}
     jobs_release_time::Vector{DateTime}
+    "Order in which job-slots become available, starting from currently available"
+    job_slots_avail_order::Vector{Int}
     " free CPUs"
     cpus_free::Int
-    cpu_used::Vector{Int}
+    cpu_used::Vector{JobId}
+    cpu_used_by_job_slots::Vector{Int}
     " free memory in MiB "
     memory_free::Int
     " cpu slots"
@@ -162,7 +167,14 @@ mutable struct ComputeNodeSL
     " list of GRES in current use => Vector of GRES use status"
     gres_used::Vector{JobId}
     gres_release_time::Vector{DateTime}
-#    "work array"
+    gres_avail_order::Vector{Int}
+
+    ares_type::Vector{ARESType}
+    ares_model::Vector{ARESModel}
+    ares_total::Vector{Int}
+    ares_used::Vector{Int}
+    ares_free::Vector{Int}
+    #    "work array"
 #    gres_used_wa::Vector{Bool}
 end
 
@@ -291,8 +303,8 @@ mutable struct BatchJobSL
     cpus::Int64
     cpus_per_node::Int64
     nodes::Int64
-    gres_per_node::Vector{GRESType}
-    gres_model_per_node::Vector{GRESModel}
+    gres_per_node::Vector{ARESType}
+    gres_model_per_node::Vector{ARESModel}
 
     " memory per cpu in MB "
     mem_per_cpu::Int64
@@ -329,6 +341,8 @@ mutable struct JobOnResourceSL
     runnable_nodes_bool::Vector{Bool}
     "Currently runnable nodes, indexing as in runnable_nodes"
     currently_runnable_nodes::Vector{Bool}
+    "runnable_nodes availtime"
+    runnable_nodes_availtime::Vector{DateTime}
     "temporary array for runnable_nodes calculations"
     gres_counted::Vector{Bool}
 
@@ -340,6 +354,7 @@ function JobOnResourceSL(job::BatchJobSL)
             Vector{NodeId}(),
             Vector{Bool}(),
             Vector{Bool}(),
+            Vector{DateTime}(),
             Vector{Bool}(),
             job)
 end
@@ -383,12 +398,18 @@ mutable struct HPCResourceSL
     executing::Dict{JobId,JobOnResourceSL}
     "Jobs finished"
     history::Vector{BatchJobSL}
+    "Job order in queue"
+    jobs_order::Vector{Int}
 
     "Maximal observed GRES in nodes (used for temporary arrays allocations)"
     gres_max::Int
 
     "allocation/deallocation can be expansive so do it less often"
     cleanup_arrays::Int
+
+    "Freq of tracking of individual allocatable resource, if negative do not track"
+    ind_alloc_res_tracking_df_freq::Int
+    ind_alloc_res_tracking_df::DataFrame
 end
 
 
@@ -445,11 +466,9 @@ mutable struct SimulationSL
     """
     model_extra_step::Union{Function,Nothing}
 
-    # 
-    GRESTypes::Vector{String}
-    GRESTypes_id::Dict{String, GRESType}
-    GRESModels::Vector{String}
-    GRESModels_id::Dict{String, GRESModel}
-
-    
+    # Allocatable resources look-up
+    ARESTypes::Vector{String}
+    ARESTypes_id::Dict{String, ARESType}
+    ARESModels::Vector{String}
+    ARESModels_id::Dict{String, ARESModel}
 end

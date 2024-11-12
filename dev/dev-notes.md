@@ -85,7 +85,7 @@ julia --project=.. ./simple1.jl
 
 ```jl
 
-MyType=Partition
+MyType=BatchJob
 
 for field in fieldnames(MyType)
     println("$field::Union{Missing,$(fieldtype(MyType, field))}=missing,")
@@ -103,7 +103,14 @@ end
 ```
 
 
+# REg on Visuals
+```
+using VisualRegressionTests
 
+@plottest plot_node_util(sim) "simple1_jl.png" !isci() 5e-3
 ```
 
+```
+using Plots
+# savefig(plot_node_util(sim), "simple1_jl.png")
 ```

@@ -38,3 +38,5 @@ run!(sim; run_till_no_jobs=true);
 println(sim.adf[1:10,:])
 println(sim.mdf[1:10,:])
 println(sim.resource.stats.node_occupancy_by_task[:,:])
+
+plot_node_util(sim)

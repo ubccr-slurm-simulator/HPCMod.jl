@@ -65,4 +65,7 @@ include("hpc_resource_sl.jl")
 export ComputeNodeSL, model_step_sl!, SimulationSL, get_ids_from_str_ids, add_resource!
 export add_nodes!, add_partition!, add_qos!, add_account!, add_user!, add_job!, run!
 
+
+include("hpc_samples.jl")
+
 end

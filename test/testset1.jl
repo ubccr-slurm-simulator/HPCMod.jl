@@ -2,6 +2,11 @@ using HPCMod
 using Random
 using DataFrames
 using Dates
+using VisualRegressionTests
+using Plots
+
+# popup on local machine only
+isci() = get(ENV, "CI", "false") == "true"
 
 @testset "BatchJobSimple Comparison" begin
     sim = SimulationSimple()
@@ -45,6 +50,9 @@ end
     @test sum(sim.mdf.jobs_in_queue) > 0
     @test sum(sim.mdf.jobs_running) > 0
     @test sum(sim.mdf.jobs_done) > 0
+
+    @plottest plot_node_util(sim) "simple1_jl.png" !isci() 5e-3
+
 end
 
 @testset "Examples: simple2 " begin

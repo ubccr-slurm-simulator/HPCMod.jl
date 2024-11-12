@@ -1,6 +1,7 @@
 
 using Logging
 using DataFrames
+using CSV
 using Agents
 using Random
 using Printf
@@ -253,8 +254,15 @@ HPCMod.show_queue(sim, resource)
 HPCMod.show_history(sim, resource)
 
 #check_finished_job!(sim, resource)
-
+#sim.resource[1].ind_alloc_res_tracking_df
+#CSV.write("iares.csv", sim.resource[1].ind_alloc_res_tracking_df)
+#HPCMod.track_ind_alloc_res!(sim, sim.resource[1])
 #pprintln(resource.executing)
 
 #*":"*GRESModels[mid]
 
+#a=[DateTime(2024,1,1), HPCMod.DATETIME_UNSET_L, DateTime(2023,1,1)]
+#p=Vector{Int}()
+#sortperm!(p, a, rev=false)
+
+#a[p]
