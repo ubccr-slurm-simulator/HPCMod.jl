@@ -12,22 +12,22 @@ function gen_micro12()
 
 
     # NodeName=DEFAULT RealMemory=48000 Procs=12 Sockets=2 CoresPerSocket=6 ThreadsPerCore=1
-    # NodeName=m[1-4] Procs=12 Sockets=2 CoresPerSocket=6 ThreadsPerCore=1 Feature=IB,CPU-M
+    # NodeName=m[1-4] Procs=8 Sockets=2 CoresPerSocket=4 ThreadsPerCore=1 Feature=IB,CPU-M
     add_nodes!(
         sim, resource,
         map(x->@sprintf("m%d",x), 1:4);
         sockets=2,
-        cores_per_socket=6,
+        cores_per_socket=4,
         memory=48000,
         features=["IB","CPU-M"]
     )
 
-    # NodeName=n[1-4] Procs=16 Sockets=2 CoresPerSocket=6 ThreadsPerCore=1 Feature=IB,CPU-N
+    # NodeName=n[1-4] Procs=12 Sockets=2 CoresPerSocket=6 ThreadsPerCore=1 Feature=IB,CPU-N
     add_nodes!(
         sim, resource,
         map(x->@sprintf("n%d",x), 1:4);
         sockets=2,
-        cores_per_socket=8,
+        cores_per_socket=12,
         memory=48000,
         features=["IB","CPU-N"]
     )
@@ -37,7 +37,7 @@ function gen_micro12()
         sim, resource,
         ["g1"];
         sockets=2,
-        cores_per_socket=6,
+        cores_per_socket=4,
         memory=48000,
         features=["IB","CPU-G"],
         gres=["GPU","GPU","FPGA"], # FPGA is for testing/debugging purposes
@@ -47,7 +47,7 @@ function gen_micro12()
         sim, resource,
         ["gn1", "gn2"];
         sockets=2,
-        cores_per_socket=8,
+        cores_per_socket=6,
         memory=128000,
         features=["IB","CPU-N"],
         gres=["GPU","GPU"],
@@ -59,7 +59,7 @@ function gen_micro12()
         sim, resource,
         ["b1"];
         sockets=2,
-        cores_per_socket=8,
+        cores_per_socket=6,
         memory=512000,
         features=["IB","CPU-N","BigMem"]
     )

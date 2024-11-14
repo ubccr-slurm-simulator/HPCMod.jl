@@ -310,6 +310,11 @@ mutable struct BatchJobSL
     mem_per_cpu::Int64
     node_sharing::NodeSharing
 
+    # Requested ARES per node
+    ares_type_per_node::Vector{ARESType}
+    ares_model_per_node::Vector{ARESModel}
+    ares_req_per_node::Vector{Int}
+
     " required feature specification, default NONE (char *features;)"
     features::Vector{NodeFeatureId}
 

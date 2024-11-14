@@ -138,8 +138,19 @@ function add_nodes!(
     ares_type::Vector{ARESType} = [sim.ARESTypes_id[s] for s in ["CPU", "Memory"]]
     ares_model::Vector{ARESModel} = [sim.ARESModels_id[s] for s in ["CPU", "Memory"]]
     ares_total::Vector{Int} = [cpus, memory]
-    ares_used::Vector{Int} = [0, 0]
-    ares_free::Vector{Int} = [cpus, memory]
+
+
+    for gres_type in sort(unique(gres_ids))
+        models = gres_model_ids[gres_ids .== gres_type]
+        for model in sort(unique(models))
+            push!(ares_type, gres_type)
+            push!(ares_model, model)
+            push!(ares_total, sum(models.==model))
+        end
+    end
+
+    ares_used::Vector{Int} = fill(0,length(ares_type))
+    ares_free::Vector{Int} = copy(ares_total)
 
     #if length(gres) > 0
 #
@@ -329,16 +340,30 @@ function add_job!(
     cpus % cpus_per_node != 0 && throw("cpus should be multiple of cpus_per_node")
     cpus % nodes != 0 && throw("cpus should be multiple of nodes")
 
-
+    ares_type_per_node::Vector{ARESType} = [sim.ARESTypes_id[s] for s in ("CPU", "Memory")]
+    ares_model_per_node::Vector{ARESModel} = [sim.ARESModels_id[s] for s in ("CPU", "Memory")]
+    ares_req_per_node::Vector{Int} = [cpus_per_node, cpus_per_node*mem_per_cpu]
+    
     features_id::Vector{NodeFeatureId} = [resource.NodeFeatures_id[feature] for feature in features]
     gres_per_node_id::Vector{ARESType} = [sim.ARESTypes_id[gres] for gres in gres_per_node]
     if length(gres_per_node_id) > 0
+        
         if length(gres_per_node_id) == length(gres_model_per_node)
             gres_model_per_node_id::Vector{ARESModel} = [sim.ARESModels_id[gres] for gres in gres_model_per_node]
         elseif length(gres_model_per_node)==0
+            # Some generic GRES of that Type
             gres_model_per_node_id=fill(GRES_MODEL_ANY, length(gres_per_node_id))
         else
             throw("GRES Model size do not match GRES type")
+        end
+
+        for gres_type in sort(unique(gres_per_node_id))
+            models = gres_model_per_node_id[gres_per_node_id .== gres_type]
+            for model in sort(unique(models))
+                push!(ares_type_per_node, gres_type)
+                push!(ares_model_per_node, model)
+                push!(ares_req_per_node, sum(models.==model))
+            end
         end
     else
         gres_model_per_node_id = Vector{ARESModel}()
@@ -348,11 +373,17 @@ function add_job!(
     walltime=Millisecond(0)
     nodes_list=Vector{NodeId}()
 
+    
+
     job = BatchJobSL(
         job_id, resource.id, user_id, user_account_id, account_id, partition_id, qos_id, 
         cpus, cpus_per_node, nodes, 
         gres_per_node_id, gres_model_per_node_id,
-        mem_per_cpu, node_sharing, features_id, req_walltime, 
+        mem_per_cpu, node_sharing, 
+        ares_type_per_node,
+        ares_model_per_node,
+        ares_req_per_node,
+        features_id, req_walltime, 
         sim_walltime, submit_time, priority, JOBSTATUS_UNKNOWN, start_time, end_time, walltime, nodes_list)
 
 
@@ -432,13 +463,8 @@ function find_runnable_nodes!(
 
 
     job = jobonres.job
-
     for (node_id,node) in enumerate(resource.node)
         jobonres.runnable_nodes_bool[node_id] = false
-        # cpus_per_node::Int64
-        job.cpus_per_node > node.cpus && continue
-        job.mem_per_cpu * job.cpus_per_node > node.memory && continue
-
         has_required_features = true
         for feature in job.features
             if feature ∉ node.features
@@ -449,34 +475,31 @@ function find_runnable_nodes!(
 
         !has_required_features && continue
 
-        # GRES match
-        if length(job.gres_per_node) >0
-            fill!(jobonres.gres_counted, false)
-
-            length(job.gres_per_node) > length(node.gres) && continue
-
-            for ijob in 1:length(job.gres_per_node)
-                if job.gres_model_per_node[ijob]==GRES_MODEL_ANY
-                    for igres in 1:length(node.gres)
-                        if job.gres_per_node[ijob] == node.gres[igres] && jobonres.gres_counted[igres]==false
-                            jobonres.gres_counted[igres] = true
-                            break
-                        end
+        # cpus_per_node::Int64
+        # job.cpus_per_node > node.cpus && continue
+        # job.mem_per_cpu * job.cpus_per_node > node.memory && continue
+        has_required_ares = true
+        for (iinjob,ares_type) in enumerate(job.ares_type_per_node)           
+            ares_count::Int = 0
+            if job.ares_model_per_node[iinjob]==GRES_MODEL_ANY
+                for ionnode in 1:length(node.ares_type)
+                    if node.ares_type[ionnode]==ares_type
+                        ares_count += node.ares_total[ionnode]
                     end
-                else
-                    for igres in 1:length(node.gres)
-                        if job.gres_per_node[ijob] == node.gres[igres] && job.gres_model_per_node[ijob]==node.gres_model[igres] && jobonres.gres_counted[igres]==false
-                            jobonres.gres_counted[igres] = true
-                            break
-                        end
+                end
+            else
+                for ionnode in 1:length(node.ares_type)
+                    if node.ares_type[ionnode]==ares_type && node.ares_model[ionnode]==job.ares_model_per_node[iinjob]
+                        ares_count += node.ares_total[ionnode]
                     end
                 end
             end
-
-            if sum(jobonres.gres_counted)!=length(job.gres_per_node)
-                continue
-            end
+            # @debug "for", ares_type, job.ares_model_per_node[iinjob], "need", job.ares_req_per_node[iinjob], "got", ares_count
+            ares_count < job.ares_req_per_node[iinjob] && (has_required_ares = false) && break
         end
+
+        # @debug "Node", node.name, "fit", has_required_ares
+        has_required_ares==false && continue
 
         jobonres.runnable_nodes_bool[node_id] = true
     end
