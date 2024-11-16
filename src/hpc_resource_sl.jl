@@ -79,7 +79,7 @@ function get_ids_from_str_ids(str_ids::Vector{String}, id_dict::Dict{String, Int
     return ids
 end
 
-function add_resource!(sim::SimulationSL; name::String="HPCResourceSL",ind_alloc_res_tracking_df_freq::Int=-1)
+function add_resource!(sim::SimulationSL; name::String="HPCResourceSL",ares_tracking_df_freq::Int=-1)
     resource_id = length(sim.resource) + 1
     push!(sim.resource, HPCResourceSL(
         resource_id,
@@ -97,16 +97,12 @@ function add_resource!(sim::SimulationSL; name::String="HPCResourceSL",ind_alloc
         Vector{Int}(),
         0,
         0,
-        ind_alloc_res_tracking_df_freq,
+        ares_tracking_df_freq,
         DataFrame()
         ))
     sim.resource_id[name] = resource_id
     sim.resource[end]
 end
-#ComputeNodeSL()
-# add cluster
-# add cluster Name=micro Fairshare=1 QOS=normal,supporters
-#resource = HPCResourceSL(;name="micro")
 
 
 function add_nodes!(
@@ -152,10 +148,6 @@ function add_nodes!(
     ares_used::Vector{Int} = fill(0,length(ares_type))
     ares_free::Vector{Int} = copy(ares_total)
 
-    #if length(gres) > 0
-#
- #   end
-
     for name in nodesname_list
         # Check name uniqueness
         haskey(resource.node_id, name) && throw("Node $(name) already exists")
@@ -164,43 +156,19 @@ function add_nodes!(
         job_slots = cpus
         push!(resource.node, ComputeNodeSL(
             node_id,
-            cores_per_socket, 
-            cpus,
-            copy(features_ids), 
-            copy(gres_ids), 
-            copy(gres_model_ids),
             name,
+            copy(ares_type),
+            copy(ares_model),
+            copy(ares_total),
+            copy(features_ids), 
+            copy(ares_used),
+            copy(ares_free),
             state, 
-            memory,
-            sockets, 
-            job_slots,
-            fill(NOT_USED_BY_JOB, job_slots),
-            fill(DATETIME_UNSET_L, job_slots),
-            collect(1:job_slots),
-            cpus,
-            fill(NOT_USED_BY_JOB, cpus),
-            fill(0, job_slots),
-            memory,
-            fill(0, job_slots),
-            fill(NOT_USED_BY_JOB, length(gres_ids)),
-            fill(DATETIME_UNSET_L, length(gres_ids)),
-            collect(1:length(gres_ids)),
-            ares_type,
-            ares_model,
-            ares_total,
-            ares_used,
-            ares_free
+            Set{JobId}()
             ))
         resource.node_id[name] = node_id
     end
 
-    # init other things
-    resource.gres_max = 0
-    for node in resource.node
-        if length(node.gres) > resource.gres_max
-            resource.gres_max = length(node.gres)
-        end
-    end
     nothing
 end
 
@@ -255,6 +223,7 @@ function add_account!(sim::SimulationSL, resource::HPCResourceSL, name::String; 
     resource.account_id[name] = account_id
     nothing
 end
+
 
 function add_user!(
     sim::SimulationSL, resource::HPCResourceSL, name::String, default_account::String;
@@ -377,14 +346,16 @@ function add_job!(
 
     job = BatchJobSL(
         job_id, resource.id, user_id, user_account_id, account_id, partition_id, qos_id, 
-        cpus, cpus_per_node, nodes, 
-        gres_per_node_id, gres_model_per_node_id,
-        mem_per_cpu, node_sharing, 
+        #cpus, cpus_per_node, 
+        nodes, 
+        #gres_per_node_id, gres_model_per_node_id,
+        #mem_per_cpu, 
+        node_sharing,
         ares_type_per_node,
         ares_model_per_node,
         ares_req_per_node,
-        features_id, req_walltime, 
-        sim_walltime, submit_time, priority, JOBSTATUS_UNKNOWN, start_time, end_time, walltime, nodes_list)
+        features_id, req_walltime,
+        sim_walltime, submit_time, priority, JOBSTATUS_UNKNOWN, start_time, end_time, walltime, nodes_list, missing)
 
 
     push!(sim.user[user_id].events_list, HPCEventSL(submit_time, dt, SUBMIT_JOB, job))
@@ -475,22 +446,19 @@ function find_runnable_nodes!(
 
         !has_required_features && continue
 
-        # cpus_per_node::Int64
-        # job.cpus_per_node > node.cpus && continue
-        # job.mem_per_cpu * job.cpus_per_node > node.memory && continue
         has_required_ares = true
         for (iinjob,ares_type) in enumerate(job.ares_type_per_node)           
             ares_count::Int = 0
             if job.ares_model_per_node[iinjob]==GRES_MODEL_ANY
-                for ionnode in 1:length(node.ares_type)
-                    if node.ares_type[ionnode]==ares_type
-                        ares_count += node.ares_total[ionnode]
+                for ares_node_index in 1:length(node.ares_type)
+                    if node.ares_type[ares_node_index]==ares_type
+                        ares_count += node.ares_total[ares_node_index]
                     end
                 end
             else
-                for ionnode in 1:length(node.ares_type)
-                    if node.ares_type[ionnode]==ares_type && node.ares_model[ionnode]==job.ares_model_per_node[iinjob]
-                        ares_count += node.ares_total[ionnode]
+                for ares_node_index in 1:length(node.ares_type)
+                    if node.ares_type[ares_node_index]==ares_type && node.ares_model[ares_node_index]==job.ares_model_per_node[iinjob]
+                        ares_count += node.ares_total[ares_node_index]
                     end
                 end
             end
@@ -527,10 +495,8 @@ function find_currently_runnable_nodes!(
         node = resource.node[node_id]
         
         jobonres.currently_runnable_nodes[inode] = false
-        # cpus_per_node::Int64
-        job.cpus_per_node > node.cpus_free && continue
-        job.mem_per_cpu * job.cpus_per_node > node.memory_free && continue
 
+        #keep features
         has_required_features = true
         for feature in job.features
             if feature ∉ node.features
@@ -541,34 +507,27 @@ function find_currently_runnable_nodes!(
 
         !has_required_features && continue
 
-        # GRES match
-        if length(job.gres_per_node) >0
-            fill!(jobonres.gres_counted, false)
-
-            length(job.gres_per_node) > length(node.gres) && continue
-
-            for ijob in 1:length(job.gres_per_node)
-                if job.gres_model_per_node[ijob]==GRES_MODEL_ANY
-                    for igres in 1:length(node.gres)
-                        if job.gres_per_node[ijob] == node.gres[igres] && jobonres.gres_counted[igres]==false && node.gres_used[igres]==NOT_USED_BY_JOB
-                            jobonres.gres_counted[igres] = true
-                            break
-                        end
+        # new
+        has_required_ares = true
+        for (iinjob,ares_type) in enumerate(job.ares_type_per_node)
+            ares_need::Int = job.ares_req_per_node[iinjob]
+            if job.ares_model_per_node[iinjob]==GRES_MODEL_ANY
+                for ares_node_index in 1:length(node.ares_type)
+                    if node.ares_type[ares_node_index]==ares_type
+                        ares_need -= (node.ares_free[ares_node_index] >= ares_need) ? ares_need : node.ares_free[ares_node_index]
                     end
-                else
-                    for igres in 1:length(node.gres)
-                        if job.gres_per_node[ijob] == node.gres[igres] && job.gres_model_per_node[ijob]==node.gres_model[igres] && jobonres.gres_counted[igres]==false && node.gres_used[igres]==NOT_USED_BY_JOB
-                            jobonres.gres_counted[igres] = true
-                            break
-                        end
+                end
+            else
+                for ares_node_index in 1:length(node.ares_type)
+                    if node.ares_type[ares_node_index]==ares_type && node.ares_model[ares_node_index]==job.ares_model_per_node[iinjob]
+                        ares_need -= (node.ares_free[ares_node_index] >= ares_need) ? ares_need : node.ares_free[ares_node_index]
                     end
                 end
             end
-
-            if sum(jobonres.gres_counted)!=length(job.gres_per_node)
-                continue
-            end
+            # @debug "for", ares_type, job.ares_model_per_node[iinjob], "need", job.ares_req_per_node[iinjob], "got", ares_count
+            ares_need != 0 && (has_required_ares = false) && break
         end
+        !has_required_ares && continue
 
         jobonres.currently_runnable_nodes[inode] = true
     end
@@ -669,64 +628,57 @@ function place_job!(
     # planned release time
     release_time = sim.cur_datetime + job.req_walltime
 
+    ares_used::Vector{Vector{Int}} = Vector{Vector{Int}}()
+    
     for node_id in node_ids
         node = resource.node[node_id]
-        jobslot = findfirst(==(NOT_USED_BY_JOB), node.jobs_on_node)
-        node.jobs_on_node[jobslot] = job.id
 
-        node.jobs_release_time[jobslot] = release_time
-        # order jobslotted resources will be released
-        sortperm!(node.job_slots_avail_order, node.jobs_release_time)
-
-        # allocate cpu
-        node.cpus_free -= job.cpus_per_node
-        node.cpu_used_by_job_slots[jobslot] = job.cpus_per_node
-        
-        cpus = 0
-        for i in 1:node.cpus
-            if node.cpu_used[i]==NOT_USED_BY_JOB
-                node.cpu_used[i]=job.id
-                cpus += 1
-            end
-            if cpus >= job.cpus_per_node
-                break
-            end
-        end
-        
-        cpus != job.cpus_per_node && throw("Can not allocate enough cpus for job $(job.id), need $(job.cpus_per_node) found $(cpus)")
-
-        # allocate memory
-        node.memory_free -= job.cpus_per_node * job.mem_per_cpu
-        node.memory_used[jobslot] = job.cpus_per_node * job.mem_per_cpu
-
-        
-        
-
-        # allocate gres
-        for ijob in 1:length(job.gres_per_node)
-            if job.gres_model_per_node[ijob]==GRES_MODEL_ANY
-                for igres in 1:length(node.gres)
-                    if job.gres_per_node[ijob] == node.gres[igres]  && node.gres_used[igres]==NOT_USED_BY_JOB
-                        node.gres_used[igres] = job.id
-                        node.gres_release_time[igres] = release_time
-                        break
+        # new ares
+        for (iinjob,ares_type) in enumerate(job.ares_type_per_node)
+            ares_need::Int = job.ares_req_per_node[iinjob]
+            if job.ares_model_per_node[iinjob]==GRES_MODEL_ANY
+                for ares_node_index in 1:length(node.ares_type)
+                    if node.ares_type[ares_node_index]==ares_type
+                        ares_alloc = node.ares_free[ares_node_index] >= ares_need ? ares_need : node.ares_free[ares_node_index]
+                        ares_alloc == 0 && continue
+                        node.ares_free[ares_node_index] -= ares_alloc
+                        node.ares_used[ares_node_index] += ares_alloc
+                        ares_need -= ares_alloc
+                        push!(ares_used, [node_id, ares_node_index, ares_alloc])
                     end
                 end
             else
-                for igres in 1:length(node.gres)
-                    if job.gres_per_node[ijob] == node.gres[igres] && job.gres_model_per_node[ijob]==node.gres_model[igres] && node.gres_used[igres]==NOT_USED_BY_JOB
-                        node.gres_used[igres] = job.id
-                        node.gres_release_time[igres] = release_time
-                        break
+                for ares_node_index in 1:length(node.ares_type)
+                    if node.ares_type[ares_node_index]==ares_type && node.ares_model[ares_node_index]==job.ares_model_per_node[iinjob]
+                        ares_alloc = node.ares_free[ares_node_index] >= ares_need ? ares_need : node.ares_free[ares_node_index]
+                        ares_alloc == 0 && continue
+                        node.ares_free[ares_node_index] -= ares_alloc
+                        node.ares_used[ares_node_index] += ares_alloc
+                        ares_need -= ares_alloc
+                        push!(ares_used, [node_id, ares_node_index, ares_alloc])
                     end
                 end
             end
+            # @debug "for", ares_type, job.ares_model_per_node[iinjob], "need", job.ares_req_per_node[iinjob], "got", ares_count
+            ares_need != 0 && throw("Not enough resources but prior allocating it seems it was having enough! (ares still needed: $(ares_need))")
+            #ares_count < job.ares_req_per_node[iinjob] && (has_required_ares = false) && break
         end
-        if length(job.gres_per_node) > 0
-            sortperm!(node.gres_avail_order, node.gres_release_time)
+
+        push!(node.jobs_on_node, job.id)
+
+        # sanity check
+        for iares in 1:length(node.ares_type)
+            node.ares_total[iares] != node.ares_free[iares] + node.ares_used[iares] && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_used[iares] < 0 && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_free[iares] < 0 && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_free[iares] > node.ares_total[iares] && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_used[iares] > node.ares_total[iares] && throw("Miscalulated resource use! Shouldn't happen!")
         end
+
     end
     @debug "Job $(jobonres.job.id) allocated on:  $([resource.node[node_id].name for node_id in node_ids])"
+
+    jobonres.job.ares_used = transpose(reduce(hcat,ares_used))
 
     jobonres.job.start_time = sim.cur_datetime
     jobonres.job.nodes_list = copy(node_ids)
@@ -747,37 +699,25 @@ function finish_job!(
 
     job = jobonres.job
 
+    # new
+    for (node_id, ares_node_index, ares_units ) in eachrow(job.ares_used)
+        resource.node[node_id].ares_used[ares_node_index] -= ares_units
+        resource.node[node_id].ares_free[ares_node_index] += ares_units
+    end
+
     for node_id in job.nodes_list
         node = resource.node[node_id]
-        jobslot = findfirst(==(job.id), node.jobs_on_node)
-        node.jobs_on_node[jobslot] = NOT_USED_BY_JOB
-        node.jobs_release_time[jobslot] = DATETIME_UNSET_L
-        sortperm!(node.job_slots_avail_order, node.jobs_release_time)
-
-        # deallocate cpu
-        node.cpus_free += node.cpu_used_by_job_slots[jobslot]
-        node.cpu_used_by_job_slots[jobslot] = 0
-        
-
-        for i in 1:node.cpus
-            node.cpu_used[i]==job.id && (node.cpu_used[i]=NOT_USED_BY_JOB)
-        end
-
-        # deallocate memory
-        node.memory_free += node.memory_used[jobslot]
-        node.memory_used[jobslot] = 0
-
-        # deallocate gres
-        for igres in 1:length(node.gres)
-            if node.gres_used[igres] == job.id
-                node.gres_used[igres] = NOT_USED_BY_JOB
-                node.gres_release_time[igres] = DATETIME_UNSET_L
-            end
-        end
-        if length(job.gres_per_node) > 0
-            sortperm!(node.gres_avail_order, node.gres_release_time)
+        delete!(node.jobs_on_node, job.id)
+        # sanity check
+        for iares in 1:length(node.ares_type)
+            node.ares_total[iares] != node.ares_free[iares] + node.ares_used[iares] && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_used[iares] < 0 && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_free[iares] < 0 && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_free[iares] > node.ares_total[iares] && throw("Miscalulated resource use! Shouldn't happen!")
+            node.ares_used[iares] > node.ares_total[iares] && throw("Miscalulated resource use! Shouldn't happen!")
         end
     end
+
     @debug "Job $(jobonres.job.id) deallocated from:  $([resource.node[node_id].name for node_id in job.nodes_list])"
 
     jobonres.job.end_time = sim.cur_datetime
@@ -843,62 +783,6 @@ function user_step!(sim::SimulationSL, model::StandardABM, user::UserSL)
         end
     end
 
-    # if length(user.inividual_jobs) == 0 && length(user.tasks_to_do) == 0 && length(user.tasks_active) == 0
-    #     return
-    # end
-    # # process finished jobs, archive finished tasks
-    # for job in user.jobs_to_process
-    #     job.task.nodetime_left -= job.nodes * job.walltime
-    #     job.task.nodetime_done += job.nodes * job.walltime
-
-    #     # in what time user will check this job
-    #     job.task.next_check_time = abmtime(model) + user.thinktime_generator(sim, user)
-
-    #     popat!(job.task.current_jobs, findfirst(==(job.id), job.task.current_jobs))
-    #     push!(job.task.jobs, job.id)
-    # end
-
-    # # retire completed active tasks
-    # i = 1
-    # while i <= length(user.tasks_active)
-    #     if user.tasks_active[i].nodetime_left <= 0 && user.tasks_active[i].nodetime_total > 0 && user.tasks_active[i].next_check_time <= abmtime(model)
-    #         task = popat!(user.tasks_active, i)
-
-    #         task.nodetime_left = 0
-    #         task.end_time = abmtime(model)
-
-    #         push!(user.tasks_done, task)
-    #     else
-    #         i += 1
-    #     end
-    # end
-    # resize!(user.jobs_to_process, 0)
-
-    # # users extra step
-    # isnothing(sim.user_extra_step) == false && sim.user_extra_step(sim, model, UserSimple)
-
-    # # activate new tasks
-    # while length(user.tasks_to_do) > 0 && length(user.tasks_active) < user.max_concurrent_tasks && first(user.tasks_to_do).submit_time <= abmtime(model)
-    #     task = pop!(user.tasks_to_do)
-    #     task.start_time = abmtime(model)
-    #     push!(user.tasks_active, task)
-    # end
-
-    # # submit new job within active tasks
-    # global task_split!
-    # for task in user.tasks_active
-    #     if length(task.current_jobs) < task.max_concurrent_jobs && task.nodetime_left > 0 && task.next_check_time <= abmtime(model)
-    #         job = task_split![task.task_split_schema](sim, task; user)
-    #         submit_job(sim, model, sim.resource, job)
-    #     end
-    # end
-
-    # # submit new individual job
-    # while length(user.inividual_jobs) > 0 && first(user.inividual_jobs).submit_time <= abmtime(model)
-    #     job = pop!(user.inividual_jobs)
-    #     submit_job(sim, model, sim.resource, job)
-    # end
-
     return
 end
 
@@ -927,37 +811,7 @@ function run_scheduler_backfill!(sim::SimulationSL, resource::HPCResourceSL)
     # no high priority jobs, so nothing to do
     next_priority_ijob < 0 && return
     next_priority_job = resource.queue[next_priority_ijob]
-
-    # find_runnable_nodes_availtime!()
-
-    # while length(resource.queue) > 0
-    #     nodes_free = resource.nodes - used_nodes(resource)
-    #     #println("Time: $(abmtime(model)) free nodes: $(nodes_free) queue $(length(resource.queue))")
-
-    #     # any jobs with fit by node count
-    #     job_fit = findfirst(
-    #         x -> x.nodes <= nodes_free, resource.queue)
-
-    #     isnothing(job_fit) && return
-
-    #     # when next priority job start
-    #     next_fifo_job = resource.queue[1]
-    #     next_fifo_job_starttime = resource.node_released_at_sorted[next_fifo_job.nodes]
-
-    #     next_fifo_job_starttime <= 0 && return
-
-    #     # any jobs with fit by node count and walltime
-    #     job_fit = findfirst(
-    #         x -> x.nodes <= nodes_free && x.walltime <= next_fifo_job_starttime, resource.queue)
-    #     isnothing(job_fit) && return
-
-    #     # schedule the job
-    #     job = place_job!(model, resource, job_fit)
-    #     job.scheduled_by = Backfill
-    #     #println("jobs_fit_nodes: $(jobs_fit_nodes) next_fifo_job_starttime $(next_fifo_job_starttime) jobs_fit_nodes_and_time $(jobs_fit_nodes_and_time)")
-
-    #     break
-    # end
+    
 end
 
 
@@ -1009,32 +863,26 @@ function check_finished_job!(sim::SimulationSL, resource::HPCResourceSL)
 end
 
 
-function track_ind_alloc_res!(sim::SimulationSL, resource::HPCResourceSL)
-    if nrow(resource.ind_alloc_res_tracking_df)==0
+function track_ares!(sim::SimulationSL, resource::HPCResourceSL)
+    if nrow(resource.ares_tracking_df)==0
         iares_str::Vector{String} = Vector{String}()
 
         for node in resource.node
-            append!(iares_str, [
-                ["$(node.name).cpu$(icpu)" for icpu in 1:node.cpus];
-                ["$(node.name).gres$(i)" for i in 1:length(node.gres)]
-            ])
+            append!(iares_str, ["$(node.name):$(sim.ARESModels[iares])" for iares in node.ares_model])
         end
-        resource.ind_alloc_res_tracking_df[!, "t"] = Vector{DateTime}()
+        resource.ares_tracking_df[!, "t"] = Vector{DateTime}()
         for colname in iares_str
-            resource.ind_alloc_res_tracking_df[!, colname] = Vector{Int}()
+            resource.ares_tracking_df[!, colname] = Vector{Int}()
         end
     end
 
     new_row::Vector{Any} = [sim.cur_datetime]
 
     for node in resource.node
-        append!(new_row, [
-            [node.cpu_used[i] for i in 1:node.cpus];
-            [node.gres_used[i] for i in 1:length(node.gres)]
-        ])
+        append!(new_row, node.ares_used)
     end
 
-    push!(resource.ind_alloc_res_tracking_df, new_row)
+    push!(resource.ares_tracking_df, new_row)
 end
 
 function model_step_stats!(sim::SimulationSL)
@@ -1096,9 +944,9 @@ function model_step_sl!(model::StandardABM)
     # more stats
     model_step_stats!(sim)
 
-    sim.resource[1].ind_alloc_res_tracking_df_freq > 0 && \
-        sim.cur_step % sim.resource[1].ind_alloc_res_tracking_df_freq==0 && \
-        track_ind_alloc_res!(sim, sim.resource[1])
+    sim.resource[1].ares_tracking_df_freq > 0 && \
+        sim.cur_step % sim.resource[1].ares_tracking_df_freq==0 && \
+        track_ares!(sim, sim.resource[1])
 end
 
 function run!(sim::SimulationSL; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
@@ -1162,20 +1010,30 @@ function show_queue(sim::SimulationSL, resource::HPCResourceSL)
     end
 end
 
-function gres_str(sim::SimulationSL, resource::HPCResourceSL, gres_type::Vector{ARESType}, gres_model::Vector{ARESModel})
-    if length(gres_model) == 0
-        sids = [sim.ARESTypes[tid] for tid in gres_type]
-    else
-        sids = [sim.ARESTypes[tid]* ( (mid == GRES_MODEL_ANY) ? "" : ":$(sim.ARESModels[mid])") for (tid, mid) in zip(gres_type, gres_model)]
+
+function ares_str(sim::SimulationSL, 
+    ares_type::Vector{ARESType}, 
+    ares_model::Vector{ARESModel},
+    ares_units::Vector{Int})::String
+    s = ""
+    for iares in 1:length(ares_type)
+        if sim.ARESTypes[ares_type[iares]] == sim.ARESModels[ares_model[iares]]
+            s *= "$(sim.ARESTypes[ares_type[iares]])"
+        else
+            s *= "$(sim.ARESTypes[ares_type[iares]]):$(sim.ARESModels[ares_model[iares]])"
+        end
+
+        ares_units[iares] != 1 && (s *= ":$(ares_units[iares])")
+        iares != length(ares_type) && (s *= ",")
     end
-    d = Dict{String, Int}()
-    for s in sids
-        !haskey(d, s) && (d[s] = 0)
-        d[s] += 1 
-    end
-    usids = unique(sids)
-    join([(d[s]==1) ? s : "$(s):$(d[s])" for s in usids],",")
+    s
 end
+
+function ares_str(sim::SimulationSL,
+    node::ComputeNodeSL)::String
+    ares_str(sim, node.ares_type, node.ares_model, node.ares_total)
+end
+
 
 function show_history(sim::SimulationSL, resource::HPCResourceSL)
     println("JOBSTATUS_DONE")
@@ -1191,5 +1049,21 @@ function show_history(sim::SimulationSL, resource::HPCResourceSL)
         gres_list = (length(job.gres_per_node)==0) ? "NA" : gres_str(sim, resource, job.gres_per_node, job.gres_model_per_node)
 
         println("$(job.id) $(job.cpus) $(job.nodes) $(job.submit_time) $(job.start_time) $(job.end_time) $(walltime) $(gres_list) $(nodes_list)")
+    end
+end
+
+
+function show_node_info(sim::SimulationSL, resource::HPCResourceSL)
+    for (inode,node) in enumerate(resource.node)
+        print("$(inode) $(node.name):")
+        for iares in 1:length(node.ares_type)
+            if sim.ARESTypes[node.ares_type[iares]] == sim.ARESModels[node.ares_model[iares]]
+                print(" $(sim.ARESTypes[node.ares_type[iares]]):$(node.ares_used[iares])/$(node.ares_total[iares])")
+            else
+                print(" $(sim.ARESTypes[node.ares_type[iares]]):$(sim.ARESModels[node.ares_model[iares]]):$(node.ares_used[iares])/$(node.ares_total[iares])")
+            end
+        end
+        print(" State=$(node.node_state) JobsOnNode=$(node.jobs_on_node)")
+        print("\n")
     end
 end

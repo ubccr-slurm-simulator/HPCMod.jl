@@ -74,40 +74,55 @@ largely adopted from Slurm's node_info_t
 """
 mutable struct ComputeNodeSL
     id::Int
+    " node name to slurm "
+    name::String
     # char *arch;		" computer architecture "
 	# char *bcast_address;	" BcastAddr (optional) "
 	# uint16_t boards;        " total number of boards per node  "
 	# time_t boot_time;	" time of node boot "
 	# char *cluster_name;	" Cluster name ONLY set in federation "
 
-	" number of cores per socket (node_info_t.cores)"
-    cores_per_socket::Int
+    " Allocatable Resource Type (CPU, Memory, GPU, ...)"
+    ares_type::Vector{ARESType}
+    " Allocatable Resource Model"
+    ares_model::Vector{ARESModel}
+    "total units of allocatable resource"
+    ares_total::Vector{Int}
+	" list of a node's available features "
+    features::Vector{NodeFeatureId}
+    "units used of allocatable resources"
+    ares_used::Vector{Int}
+    "units free of allocatable resources"
+    ares_free::Vector{Int}
+
+
+
+	# " number of cores per socket (node_info_t.cores)"
+    # cores_per_socket::Int
 	# uint16_t core_spec_cnt; " number of specialized cores on node "
 	# uint32_t cpu_bind;	" Default task binding "
 	# uint32_t cpu_load;	" CPU load * 100 "
 
-	" configured count of cpus running on the node "
-    cpus::Int
+	# " configured count of cpus running on the node "
+    # cpus::Int
 	# uint16_t cpus_efctv;	" count of effective cpus on the node. i.e cpus minus specialized cpus"
 	# char *cpu_spec_list;	" node's specialized cpus "
 	# acct_gather_energy_t *energy;	 " energy data "
 	# ext_sensors_data_t *ext_sensors; " external sensor data "
 	# char *extra;		" arbitrary sting "
 	# power_mgmt_data_t *power;        " power management data "
-	" list of a node's available features "
-    features::Vector{NodeFeatureId}
+
 	# char *features_act;	" list of a node's current active features,
 	# 			 * Same as "features" if NULL "
-	" list of a node's generic resources types"
-    gres::Vector{ARESType}
-    " list of a node's generic resources models "
-    gres_model::Vector{ARESModel}
+	# " list of a node's generic resources types"
+    # gres::Vector{ARESType}
+    # " list of a node's generic resources models "
+    # gres_model::Vector{ARESModel}
 	# char *gres_drain;	" list of drained GRES "
 	# time_t last_busy;	" time node was last busy (i.e. no jobs) "
 	# char *mcs_label;	" mcs label if mcs plugin in use "
 	# uint64_t mem_spec_limit; " MB memory limit for specialization "
-	" node name to slurm "
-    name::String
+
 	# uint32_t next_state;	" state after reboot (enum node_states) "
 	# char *node_addr;	" communication name (optional) "
 	# char *node_hostname;	" node's hostname (optional) "
@@ -119,8 +134,8 @@ mutable struct ComputeNodeSL
 	# 			 * this node, NOT supplied by slurmctld, but
 	# 			 * populated by scontrol "
 	# uint16_t port;		" TCP port number of the slurmd "
-	" configured MB of real memory on the node "
-    memory::Int
+	# " configured MB of real memory on the node "
+    # memory::Int
 	# char *comment;		" arbitrary comment "
 	# char *reason;		" reason for node being DOWN or DRAINING "
 	# time_t reason_time;	" Time stamp when reason was set, ignore if
@@ -136,8 +151,8 @@ mutable struct ComputeNodeSL
 	# 					  * slurm_get_select_nodeinfo()
 	# 					  * to access contents "
 	# time_t slurmd_start_time;" time of slurmd startup "
-	" total number of sockets per node "
-    sockets::Int
+	# " total number of sockets per node "
+    # sockets::Int
 	#" number of threads per core (node_info_t.threads_per_core)"
     #threads_per_core::Int
 	# uint32_t tmp_disk;	" configured MB of total disk in TMP_FS "
@@ -146,36 +161,32 @@ mutable struct ComputeNodeSL
 	# char *version;		 " Slurm version number "
     #function ComputeNodeSL(;sockets=,threads=) 
 
-    "Max number of jobs on node, typically equal to cpus"
-    job_slots::Int
+    # "number of jobs on this node"
+    # n_jobs::Int
+    # "Max number of jobs on node, typically equal to cpus"
+    # job_slots::Int
     "Job on Node, we can have up to"
-    jobs_on_node::Vector{JobId}
-    jobs_release_time::Vector{DateTime}
-    "Order in which job-slots become available, starting from currently available"
-    job_slots_avail_order::Vector{Int}
-    " free CPUs"
-    cpus_free::Int
-    cpu_used::Vector{JobId}
-    cpu_used_by_job_slots::Vector{Int}
-    " free memory in MiB "
-    memory_free::Int
-    " cpu slots"
-    memory_used::Vector{Int}
+    jobs_on_node::Set{JobId}
+    # jobs_release_time::Vector{DateTime}
+    # "Order in which job-slots become available, starting from currently available"
+    # job_slots_avail_order::Vector{Int}
+    # " free CPUs"
+    # cpus_free::Int
+    # cpu_used::Vector{JobId}
+    # cpu_used_by_job_slots::Vector{Int}
+    # " free memory in MiB "
+    # memory_free::Int
+    # " cpu slots"
+    # memory_used::Vector{Int}
 
+    # " list of GRES in current use => Vector of GRES use status"
+    # gres_used::Vector{JobId}
+    # gres_release_time::Vector{DateTime}
+    # gres_avail_order::Vector{Int}
 
-
-    " list of GRES in current use => Vector of GRES use status"
-    gres_used::Vector{JobId}
-    gres_release_time::Vector{DateTime}
-    gres_avail_order::Vector{Int}
-
-    ares_type::Vector{ARESType}
-    ares_model::Vector{ARESModel}
-    ares_total::Vector{Int}
-    ares_used::Vector{Int}
-    ares_free::Vector{Int}
+    #ares
     #    "work array"
-#    gres_used_wa::Vector{Bool}
+    #    gres_used_wa::Vector{Bool}
 end
 
 
@@ -300,14 +311,14 @@ mutable struct BatchJobSL
     " Quality of Service (char *qos;)"
     qos_id::QoSId
 
-    cpus::Int64
-    cpus_per_node::Int64
+    # cpus::Int64
+    # cpus_per_node::Int64
     nodes::Int64
-    gres_per_node::Vector{ARESType}
-    gres_model_per_node::Vector{ARESModel}
+    # gres_per_node::Vector{ARESType}
+    # gres_model_per_node::Vector{ARESModel}
 
-    " memory per cpu in MB "
-    mem_per_cpu::Int64
+    # " memory per cpu in MB "
+    # mem_per_cpu::Int64
     node_sharing::NodeSharing
 
     # Requested ARES per node
@@ -334,6 +345,8 @@ mutable struct BatchJobSL
     # scheduled_by::SchedulerType
     "Vector with node ids"
     nodes_list::Vector{Int64}
+    " ARes used, cols: node_id, ares_node_index, ares_units "
+    ares_used::Union{Matrix{Int},Missing}
 end
 
 "
@@ -413,8 +426,8 @@ mutable struct HPCResourceSL
     cleanup_arrays::Int
 
     "Freq of tracking of individual allocatable resource, if negative do not track"
-    ind_alloc_res_tracking_df_freq::Int
-    ind_alloc_res_tracking_df::DataFrame
+    ares_tracking_df_freq::Int
+    ares_tracking_df::DataFrame
 end
 
 

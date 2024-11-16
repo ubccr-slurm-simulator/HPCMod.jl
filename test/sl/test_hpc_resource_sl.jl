@@ -225,8 +225,6 @@ using Logging
     HPCMod.check_resource(sim, resource)
 
 
-    # 
-    @test HPCMod.gres_str(sim, resource, resource.node[9].gres, resource.node[9].gres_model) == "GPU:GPU-Model1:2,FPGA:FPGA-Model1"
-    @test HPCMod.gres_str(sim, resource, [3,3], Vector{Int}()) == "GPU:2"
-    @test HPCMod.gres_str(sim, resource, [3,3], [0,0]) == "GPU:2"
+    @test HPCMod.ares_str(sim, resource.node[9]) == "CPU:8,Memory:48000,GPU:GPU-Model1:2,FPGA:FPGA-Model1"
+    @test HPCMod.ares_str(sim, resource.node[5]) == "CPU:24,Memory:48000"
 end
