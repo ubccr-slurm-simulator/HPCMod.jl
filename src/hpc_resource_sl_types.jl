@@ -379,20 +379,22 @@ end
 
 mutable struct HPCEventSL
     when::DateTime
-    dt::Millisecond
+    t::Float64
     event_type::HPCEventType
     event::Union{BatchJobSL}
 end
 
-@agent struct UserSL(GridAgent{1})
+@agent struct UserSL(GridAgent{2})
+    user_id::Int
     name::String
     resource_user_account_id::Vector{UserAccountId}
     next_event::Int
     events_list::Vector{HPCEventSL}
 end
 
-mutable struct HPCResourceSL
-    id::ResourceId
+# mutable struct HPCResourceSL
+@agent struct HPCResourceSL(GridAgent{2})
+    resource_id::ResourceId
     name::String
     node::Vector{ComputeNodeSL}
     node_id::Dict{String, NodeId}
@@ -430,13 +432,21 @@ mutable struct HPCResourceSL
     ares_tracking_df::DataFrame
 end
 
+#@multiagent HPCAgent(HPCResourceSL, UserSL)
+#const HPCAGENT_RESOURCE::Int = 1
+#const HPCAGENT_USER::Int = 2
+# should match order in events of model
+const PROCESS_USER_EVENT::Int = 1
+const RUN_SCHEDULER_EVENT::Int = 2
+const CHECK_WALLTIMELIMIT_EVENT::Int = 3
+
 
 mutable struct SimulationSL
     id::Int64
-    steps_per_day::Int64
-    timestep::Millisecond
-    cur_step::Int
-    cur_datetime::DateTime
+    #steps_per_day::Int64
+    #timestep::Millisecond
+    #cur_step::Int
+    #cur_datetime::DateTime
     init_datetime::DateTime
     # last_task_id::Int64
     # task_list::Vector{CompTask}
@@ -457,7 +467,7 @@ mutable struct SimulationSL
     # executed at the end of model_step!
     # """
     # model_extra_step::Union{Function,Nothing}
-    workload_done_check_freq::Int64
+    workload_done_check_freq::Float64
 
     # resources
     resource::Vector{HPCResourceSL}
@@ -468,9 +478,9 @@ mutable struct SimulationSL
     events_list::Vector{HPCEventSL}
 
     #
-    space::Union{GridSpace,Nothing}
-    model::Union{StandardABM,Nothing}
-    rng::AbstractRNG
+    # space::Union{GridSpace,Nothing}
+    # model::Union{StandardABM,Nothing}
+    # rng::AbstractRNG
     adf::Union{DataFrame,Nothing}
     mdf::Union{DataFrame,Nothing}
     """
@@ -490,3 +500,5 @@ mutable struct SimulationSL
     ARESModels::Vector{String}
     ARESModels_id::Dict{String, ARESModel}
 end
+
+

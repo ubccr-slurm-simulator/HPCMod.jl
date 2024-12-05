@@ -1,5 +1,18 @@
 module HPCMod
 
+
+const Debug1 = Base.CoreLogging.LogLevel(-200)
+const Debug2 = Base.CoreLogging.LogLevel(-400)
+const Debug3 = Base.CoreLogging.LogLevel(-600)
+const Debug4 = Base.CoreLogging.LogLevel(-800)
+const Debug5 = Base.CoreLogging.LogLevel(-1000)
+macro debug1(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., :Debug1,  exs...) end
+macro debug2(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., :Debug2,  exs...) end
+macro debug3(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., :Debug3,  exs...) end
+macro debug4(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., :Debug4,  exs...) end
+macro debug5(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., :Debug5,  exs...) end
+
+
 export CompTask
 export BatchJobSimple
 #export Base.isless
@@ -63,7 +76,8 @@ export ComputeNodeSL, PartitionSL, QoSSL, AccountSL, UserSL, BatchJobSL, JobOnRe
 include("hpc_resource_sl.jl")
 
 export ComputeNodeSL, model_step_sl!, SimulationSL, get_ids_from_str_ids, add_resource!
-export add_nodes!, add_partition!, add_qos!, add_account!, add_user!, add_job!, run!
+export add_nodes!, add_partition!, add_qos!, add_account!, add_user!, add_job!, run_model!
+export create_model_sl
 
 
 include("hpc_samples.jl")

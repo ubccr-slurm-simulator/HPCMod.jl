@@ -7,60 +7,16 @@ using PrettyPrint
 using Dates
 using DocStringExtensions
 
+function abmdatetime(init_datetime::DateTime, dt::Float64)
+    return init_datetime + Millisecond(round(dt*1000))
+end
 
-function SimulationSL(;
-    id=1,
-    init_datetime::DateTime=DateTime(2024,11,1,0,0,0),
-    timestep::Millisecond=Millisecond(3600*1000),
-    rng::AbstractRNG=Random.default_rng(123),
-    user_extra_step::Union{Function,Nothing}=nothing,
-    model_extra_step::Union{Function,Nothing}=nothing,
-    workload_done_check_freq::Int=1)
+function abmdatetime(model::EventQueueABM)
+    return abmdatetime(abmproperties(model).init_datetime, abmtime(model)*1000)
+end
 
-    Dates.value(Millisecond(24*3600*1000)) % Dates.value(timestep) != 0 && throw("Day should be multiple of timestep!")
-    
-    ARESTypes::Vector{String} = ["CPU", "Memory", "GPU"]
-    ARESTypes_id::Dict{String, ARESType} =  Dict( k=>v for (v,k) in enumerate(ARESTypes))
-    ARESModels::Vector{String} =  ["CPU", "Memory", "GPU"]
-    ARESModels_id::Dict{String, ARESModel} =  Dict( k=>v for (v,k) in enumerate(ARESTypes))
-
-    sim = SimulationSL(
-        id,
-        Day(1)÷timestep,
-        timestep,
-        0,
-        init_datetime,
-        init_datetime,
-        workload_done_check_freq,
-        Vector{HPCResourceSL}(),
-        Dict{String, ResourceId}(),
-        Vector{UserSL}(),
-        Dict{String, UserId}(),
-        NO_NEXT_EVENT,
-        Vector{HPCEventSL}(),
-        nothing,
-        nothing,
-        rng,
-        nothing,
-        nothing,
-        user_extra_step, model_extra_step,
-        ARESTypes,
-        ARESTypes_id,
-        ARESModels,
-        ARESModels_id
-        )
-    
-    sim.model = StandardABM(
-        UserSL,
-        sim.space;
-        model_step! = model_step_sl!,
-        properties=Dict(
-            :sim => sim),
-        sim.rng,
-        scheduler=Schedulers.Randomly()
-    )
-
-    sim
+function secondsfrominit(init_datetime::DateTime, m_datetime::DateTime)
+    return (m_datetime - init_datetime).value / 1000.0
 end
 
 "
@@ -79,9 +35,12 @@ function get_ids_from_str_ids(str_ids::Vector{String}, id_dict::Dict{String, Int
     return ids
 end
 
-function add_resource!(sim::SimulationSL; name::String="HPCResourceSL",ares_tracking_df_freq::Int=-1)
+function add_resource!(model::EventQueueABM; name::String="HPCResourceSL",ares_tracking_df_freq::Int=-1)
+    sim::SimulationSL = abmproperties(model)
+    #agent_id = Agents.nextid(model)
     resource_id = length(sim.resource) + 1
-    push!(sim.resource, HPCResourceSL(
+
+    resource = add_agent!((1,1), HPCResourceSL, model,
         resource_id,
         name,
         Vector{ComputeNodeSL}(), Dict{String, NodeId}(),
@@ -99,14 +58,22 @@ function add_resource!(sim::SimulationSL; name::String="HPCResourceSL",ares_trac
         0,
         ares_tracking_df_freq,
         DataFrame()
-        ))
+    )
+
+    add_event!(resource, RUN_SCHEDULER_EVENT,0, model)
+    add_event!(resource, CHECK_WALLTIMELIMIT_EVENT,0, model)
+
+    push!(sim.resource, resource)
     sim.resource_id[name] = resource_id
-    sim.resource[end]
+
+    resource
 end
 
 
+
+
 function add_nodes!(
-    sim::SimulationSL,
+    model::EventQueueABM,
     resource::HPCResourceSL,
     nodesname_list::Vector{String};
     sockets::Union{Missing, Int64}=missing,
@@ -117,6 +84,7 @@ function add_nodes!(
     gres_model::Vector{String}=Vector{String}(),
     state::NodeState=NODE_STATE_IDLE
 )
+    sim::SimulationSL = abmproperties(model)
     # cpus, cpus_per_node, nodes
     ismissing(cores_per_socket) && throw("cores_per_socket should be set")
     ismissing(sockets) && throw("sockets should be set")
@@ -173,7 +141,7 @@ function add_nodes!(
 end
 
 function add_partition!(
-    sim::SimulationSL,
+    model::EventQueueABM,
     resource::HPCResourceSL,
     name::String,
     nodes::Vector{String};
@@ -183,6 +151,7 @@ function add_partition!(
     priority_job_factor::Int=0,
     State::PartitionState=PARTITION_UP
 )
+
     haskey(resource.partition_id, name) && throw("Partition $(name) already exists")
     
     push!(resource.partition, PartitionSL(
@@ -198,7 +167,7 @@ function add_partition!(
     nothing
 end
 
-function add_qos!(sim::SimulationSL, resource::HPCResourceSL, name::String; priority::Int=0, default::Bool=false)
+function add_qos!(model::EventQueueABM, resource::HPCResourceSL, name::String; priority::Int=0, default::Bool=false)
     haskey(resource.qos_id, name) && throw("QoS $(name) already exists")
 
     push!(resource.qos, QoSSL(
@@ -210,7 +179,7 @@ function add_qos!(sim::SimulationSL, resource::HPCResourceSL, name::String; prio
     nothing
 end
 
-function add_account!(sim::SimulationSL, resource::HPCResourceSL, name::String; fairshare::Int=100)
+function add_account!(model::EventQueueABM, resource::HPCResourceSL, name::String; fairshare::Int=100)
     haskey(resource.account_id, name) && throw("Account $(name) already exists")
 
     account_id = length(resource.account) + 1
@@ -226,26 +195,26 @@ end
 
 
 function add_user!(
-    sim::SimulationSL, resource::HPCResourceSL, name::String, default_account::String;
+    model::EventQueueABM, resource::HPCResourceSL, name::String, default_account::String;
     accounts::Vector{String}=Vector{String}()
     )
     haskey(resource.user_account_id, name) && throw("User $(name) already exists")
+    sim::SimulationSL = abmproperties(model)
 
     accounts_id = sort(unique([[resource.account_id[default_account]]; [resource.account_id[acc] for acc in accounts]]))
 
     user_id = length(sim.user) + 1
-    push!(sim.user, UserSL(
+
+    user = add_agent!((1,1), UserSL, model,
         user_id,
-        (1,),
         name,
         fill(NO_USER_ACCOUNT,length(sim.resource)),
         NO_NEXT_EVENT,
         Vector{HPCEventSL}()
-    ))
-    sim.user_id[name] = user_id
+        )
 
-    # add agent to model
-    add_agent!(sim.user[end], sim.model)
+    push!(sim.user, user)
+    sim.user_id[name] = user_id
 
     user_account_id = length(resource.user_account) + 1
     push!(resource.user_account, UserAccountSL(
@@ -263,7 +232,7 @@ end
 
 
 function add_job!(
-    sim::SimulationSL, resource::HPCResourceSL;
+    model::EventQueueABM, resource::HPCResourceSL;
     user::String=missing,
     cpus::Union{Missing,Int64}=missing,
     cpus_per_node::Union{Missing,Int64}=missing,
@@ -280,9 +249,10 @@ function add_job!(
     req_walltime::Union{Missing,Millisecond}=missing,
     sim_walltime::Union{Missing,Millisecond}=missing,
     submit_time::Union{Missing,DateTime}=missing,
-    dt::Union{Missing,Millisecond}=missing,
+    dt::Union{Missing,Float64,Int}=missing,
     priority::Int=0
     )
+    sim::SimulationSL = abmproperties(model)
 
     user_id = sim.user_id[user]
     user_account_id = resource.user_account_id[user]
@@ -296,9 +266,13 @@ function add_job!(
     ismissing(sim_walltime) && (sim_walltime = req_walltime)
 
     # submit_time and dt
+    typeof(dt) == Int && (dt = Float64(dt))
     ismissing(submit_time) && ismissing(dt) && throw("either submit_time or dt should be set!")
-    ismissing(submit_time) && !ismissing(dt) && (submit_time = sim.init_datetime + dt)
-    submit_time != sim.init_datetime + dt && throw("submit_time and sim.init_time + dt should be same")
+    ismissing(submit_time) && !ismissing(dt) && (submit_time = abmdatetime(abmdatetime(model), dt))
+    ismissing(dt) && (dt = secondsfrominit(abmdatetime(model), submit_time))
+    submit_time != abmdatetime(abmdatetime(model), dt) && throw("submit_time and sim.init_time + dt should be same")
+
+    t = secondsfrominit(sim.init_datetime, submit_time)
 
     # cpus, cpus_per_node, nodes
     ismissing(cpus) && ismissing(cpus_per_node) && ismissing(nodes) && throw("Two of cpus, cpus_per_node or nodes should be set!")
@@ -358,10 +332,12 @@ function add_job!(
         sim_walltime, submit_time, priority, JOBSTATUS_UNKNOWN, start_time, end_time, walltime, nodes_list, missing)
 
 
-    push!(sim.user[user_id].events_list, HPCEventSL(submit_time, dt, SUBMIT_JOB, job))
+    push!(sim.user[user_id].events_list, HPCEventSL(submit_time, t, SUBMIT_JOB, job))
     sim.user[user_id].next_event==NO_NEXT_EVENT && (sim.user[user_id].next_event = 1)
-    job
 
+    add_event!(sim.user[user_id], PROCESS_USER_EVENT, t, model)
+
+    job
 end
 
 function is_workload_done_sl(model, s)
@@ -408,19 +384,19 @@ end
 
 function submit_job(sim::SimulationSL, model::StandardABM, resource::HPCResourceSL, user::UserSL, job::BatchJobSL)
     if job.submit_time == DATETIME_UNSET_L
-        job.submit_time = sim.cur_datetime
-    elseif job.submit_time != sim.cur_datetime
-        error("Preplaned job: job.submit_time != abmtime(model)")
+        job.submit_time = abmdatetime(model)
+    elseif job.submit_time != abmdatetime(model)
+        error("Preplaned job: job.submit_time != abmdatetime(model)")
     end
     
-    @debug "Submitting Job: $(job.id) at time $(sim.cur_datetime)"
+    @debug "Submitting Job: $(job.id) at time abmtime(model)) ($(abmdatetime(model)))"
                 
 
     # job.task.nodetime_left_unplanned -= job.nodes * job.walltime
 
-    push!(resource.queue, JobOnResourceSL(job))
+    #push!(resource.queue, JobOnResourceSL(job))
 
-    job.status = JOBSTATUS_INQUEUE
+    #job.status = JOBSTATUS_INQUEUE
     # push!(job.task.current_jobs, job.id)
 
     return
@@ -737,13 +713,16 @@ end
 "
 Check that resource follows conventions
 "
-function check_resource(sim::SimulationSL, resource::HPCResourceSL)
+function check_resource(model::EventQueueABM, resource::HPCResourceSL)::Bool
+    sim::SimulationSL = abmproperties(model)
+
     errors_count = 0
     for (i,node) in enumerate(resource.node)
         i!=node.id && (errors_count += 1)
     end
     
-    errors_count > 0 && throw("Node.id should match index in resource.node vector") 
+    errors_count > 0 && throw("Node.id should match index in resource.node vector")
+    return true
 end
 
 function attempt_to_allocate!(sim::SimulationSL, resource::HPCResourceSL, jobonres::JobOnResourceSL)::Bool
@@ -766,25 +745,25 @@ function generate_thinktime_gamma(sim::SimulationSL, user::UserSL)::Int64
     round(Int64, rand(sim.rng, gamma))
 end
 
-function user_step!(sim::SimulationSL, model::StandardABM, user::UserSL)
+# function user_step!(sim::SimulationSL, model::StandardABM, user::UserSL)
     
-    if user.next_event != NO_NEXT_EVENT
-        while user.next_event <= length(user.events_list) && user.events_list[user.next_event].when <= sim.cur_datetime
-            if user.events_list[user.next_event].event_type == SUBMIT_JOB
-                submit_job(
-                    sim, model, 
-                    sim.resource[user.events_list[user.next_event].event.resource_id], 
-                    user, 
-                    user.events_list[user.next_event].event)
-            else
-                @error "Unknown Event!"
-            end
-            user.next_event += 1
-        end
-    end
+#     if user.next_event != NO_NEXT_EVENT
+#         while user.next_event <= length(user.events_list) && user.events_list[user.next_event].when <= sim.cur_datetime
+#             if user.events_list[user.next_event].event_type == SUBMIT_JOB
+#                 submit_job(
+#                     sim, model, 
+#                     sim.resource[user.events_list[user.next_event].event.resource_id], 
+#                     user, 
+#                     user.events_list[user.next_event].event)
+#             else
+#                 @error "Unknown Event!"
+#             end
+#             user.next_event += 1
+#         end
+#     end
 
-    return
-end
+#     return
+# end
 
 function run_scheduler_fifo!(sim::SimulationSL, resource::HPCResourceSL)
     job_scheduled = 0
@@ -815,7 +794,7 @@ function run_scheduler_backfill!(sim::SimulationSL, resource::HPCResourceSL)
 end
 
 
-function run_scheduler!(sim::SimulationSL, resource::HPCResourceSL)
+function run_scheduler_old!(sim::SimulationSL, resource::HPCResourceSL)
     length(resource.queue) == 0 && return
 
     # Sort
@@ -949,8 +928,8 @@ function model_step_sl!(model::StandardABM)
         track_ares!(sim, sim.resource[1])
 end
 
-function run!(sim::SimulationSL; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
-    model::StandardABM = sim.model
+function run_model!(model::EventQueueABM; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
+    sim::SimulationSL = abmproperties(model)
     # Users Statistics
     adata0 = [
         #(:mean_tasks_to_do, u -> length(u.tasks_to_do), mean)
@@ -987,9 +966,10 @@ function run!(sim::SimulationSL; nsteps::Int64=-1, run_till_no_jobs::Bool=false)
     sim.adf, sim.mdf
 end
 
-function show_queue(sim::SimulationSL, resource::HPCResourceSL)
-    println("JOBSTATUS_RUNNING")
-    println("job.id nodes runtime")
+function show_queue(model::EventQueueABM, resource::HPCResourceSL)::Nothing
+    sim::SimulationSL = abmproperties(model)
+    msg = "JOBSTATUS_RUNNING\n"
+    msg *= "job.id nodes runtime\n"
     for (job_id,jobonres) in resource.executing
         jobonres.job.status != JOBSTATUS_RUNNING && continue
 
@@ -999,15 +979,17 @@ function show_queue(sim::SimulationSL, resource::HPCResourceSL)
         if jobonres.job.status == JOBSTATUS_RUNNING
             runtime = duration_format(sim.cur_datetime - jobonres.job.start_time)
         end
-        println("$(jobonres.job.id) $(nodes) $(runtime)")
+        msg *= "$(jobonres.job.id) $(nodes) $(runtime)\n"
     end
-    println("JOBSTATUS_INQUEUE")
-    println("job.id priority waittime")
+    msg *= "JOBSTATUS_INQUEUE\n"
+    msg *= "job.id priority waittime\n"
     for jobonres in resource.queue
         jobonres.job.status != JOBSTATUS_INQUEUE && continue
         waittime = duration_format(sim.cur_datetime - jobonres.job.submit_time)
-        println("$(jobonres.job.id) $(jobonres.job.priority) $(waittime)")
+        msg *= "$(jobonres.job.id) $(jobonres.job.priority) $(waittime)\n"
     end
+    @info msg
+    return nothing
 end
 
 
@@ -1035,9 +1017,10 @@ function ares_str(sim::SimulationSL,
 end
 
 
-function show_history(sim::SimulationSL, resource::HPCResourceSL)
-    println("JOBSTATUS_DONE")
-    println("job.id cpus nodes runtime gres nodes_list")
+function show_history(model::EventQueueABM, resource::HPCResourceSL)
+    sim::SimulationSL = abmproperties(model)
+    msg = "JOBSTATUS_DONE\n"
+    msg *= "job.id cpus nodes runtime gres nodes_list\n"
     for job in resource.history
         nodes_list = (length(job.nodes_list)==0) ? "NA" : join([resource.node[i].name for i in job.nodes_list],",")
         
@@ -1048,22 +1031,143 @@ function show_history(sim::SimulationSL, resource::HPCResourceSL)
         
         gres_list = (length(job.gres_per_node)==0) ? "NA" : gres_str(sim, resource, job.gres_per_node, job.gres_model_per_node)
 
-        println("$(job.id) $(job.cpus) $(job.nodes) $(job.submit_time) $(job.start_time) $(job.end_time) $(walltime) $(gres_list) $(nodes_list)")
+         msg *= "$(job.id) $(job.cpus) $(job.nodes) $(job.submit_time) $(job.start_time) $(job.end_time) $(walltime) $(gres_list) $(nodes_list)\n"
     end
+    @info msg
+    nothing
 end
 
 
-function show_node_info(sim::SimulationSL, resource::HPCResourceSL)
+function show_node_info(model::EventQueueABM, resource::HPCResourceSL)::Nothing
+    sim::SimulationSL = abmproperties(model)
+    msg = "Node Info:"
     for (inode,node) in enumerate(resource.node)
-        print("$(inode) $(node.name):")
+        msg *= "$(inode) $(node.name):"
         for iares in 1:length(node.ares_type)
             if sim.ARESTypes[node.ares_type[iares]] == sim.ARESModels[node.ares_model[iares]]
-                print(" $(sim.ARESTypes[node.ares_type[iares]]):$(node.ares_used[iares])/$(node.ares_total[iares])")
+                 msg *= " $(sim.ARESTypes[node.ares_type[iares]]):$(node.ares_used[iares])/$(node.ares_total[iares])"
             else
-                print(" $(sim.ARESTypes[node.ares_type[iares]]):$(sim.ARESModels[node.ares_model[iares]]):$(node.ares_used[iares])/$(node.ares_total[iares])")
+                 msg *= " $(sim.ARESTypes[node.ares_type[iares]]):$(sim.ARESModels[node.ares_model[iares]]):$(node.ares_used[iares])/$(node.ares_total[iares])"
             end
         end
-        print(" State=$(node.node_state) JobsOnNode=$(node.jobs_on_node)")
-        print("\n")
+         msg *= " State=$(node.node_state) JobsOnNode=$(node.jobs_on_node)\n"
     end
+    @info msg
+    nothing
+end
+
+
+function process_user_event!(agent::UserSL, model::EventQueueABM)
+    @debug5 "process_user_event! $(abmproperties(model).cur_datetime) $(abmtime(model)) $(agent.id) $(agent.user_id)"
+    if user.next_event != NO_NEXT_EVENT
+        while user.next_event <= length(user.events_list) && user.events_list[user.next_event].t <= abmtime(model)
+            if user.events_list[user.next_event].event_type == SUBMIT_JOB
+                submit_job(
+                    sim, model, 
+                    sim.resource[user.events_list[user.next_event].event.resource_id], 
+                    user, 
+                    user.events_list[user.next_event].event)
+            else
+                @error "Unknown Event!"
+            end
+            user.next_event += 1
+        end
+    end
+
+    return
+end
+
+function process_user_event_time(agent::UserSL, model::EventQueueABM, propensity::Float64)
+    @debug5 "submit_job_time"
+    return 30.0
+end
+
+
+function run_scheduler_time(agent::HPCResourceSL, model::EventQueueABM, propensity::Float64)
+    @info "run_scheduler_time"
+
+    return 1.0
+end
+
+function check_walltimelimit_time(agent::HPCResourceSL, model::EventQueueABM, propensity::Float64)
+    @info "check_walltimelimit_time"
+    return 300.0
+end
+
+function run_scheduler!(agent::HPCResourceSL, model::EventQueueABM)
+    @debug5 "run_scheduler!  $(abmproperties(model).cur_datetime) $(abmtime(model))"
+
+
+    add_event!(agent, RUN_SCHEDULER_EVENT,1, model)
+end
+
+function check_walltimelimit!(agent::HPCResourceSL, model::EventQueueABM)
+    @debug5 "check_walltimelimit!"
+    add_event!(agent, CHECK_WALLTIMELIMIT_EVENT,300, model)
+end
+
+
+function create_model_sl(;
+    id=1,
+    init_datetime::DateTime=DateTime(2024,11,1,0,0,0),
+    #timestep::Millisecond=Millisecond(3600*1000),
+    rng::AbstractRNG=Random.default_rng(123),
+    user_extra_step::Union{Function,Nothing}=nothing,
+    model_extra_step::Union{Function,Nothing}=nothing,
+    workload_done_check_freq::Float64=3600.0
+    )
+
+    # set events
+    process_user_event_event = AgentEvent(
+        action! = process_user_event!, propensity = 1.0, types = UserSL, timing=process_user_event_time)
+    run_scheduler_event = AgentEvent(
+        action! = run_scheduler!, propensity = 1.0, types = HPCResourceSL, timing=run_scheduler_time)
+    check_walltimelimit_event = AgentEvent(
+        action! = check_walltimelimit!, propensity = 1.0, types = HPCResourceSL, timing=check_walltimelimit_time)
+
+    events=(process_user_event_event, run_scheduler_event, check_walltimelimit_event)
+    
+    ARESTypes::Vector{String} = ["CPU", "Memory", "GPU"]
+    ARESTypes_id::Dict{String, ARESType} =  Dict( k=>v for (v,k) in enumerate(ARESTypes))
+    ARESModels::Vector{String} =  ["CPU", "Memory", "GPU"]
+    ARESModels_id::Dict{String, ARESModel} =  Dict( k=>v for (v,k) in enumerate(ARESTypes))
+
+    sim = SimulationSL(
+        id,
+        init_datetime,
+        workload_done_check_freq,
+        Vector{HPCResourceSL}(),
+        Dict{String, ResourceId}(),
+        Vector{UserSL}(),
+        Dict{String, UserId}(),
+        NO_NEXT_EVENT,
+        Vector{HPCEventSL}(),
+        #nothing,
+        #nothing,
+        #rng,
+        nothing,
+        nothing,
+        user_extra_step, model_extra_step,
+        ARESTypes,
+        ARESTypes_id,
+        ARESModels,
+        ARESModels_id
+        )
+    
+    model = EventQueueABM(
+        Union{HPCResourceSL,UserSL}, events, GridSpace((10,10)); 
+        rng, 
+        warn = false,
+        properties=sim,
+        autogenerate_on_add = false,
+        autogenerate_after_action = false)
+
+    # tests to insure proper indexing
+    #@assert HPCAGENT_RESOURCE == getfield(model, :type_func)(resource)
+    #@assert HPCAGENT_USER == getfield(model, :type_func)(user1)
+    @assert abmevents(model)[PROCESS_USER_EVENT] === process_user_event_event
+    @assert abmevents(model)[RUN_SCHEDULER_EVENT] === run_scheduler_event
+    @assert abmevents(model)[CHECK_WALLTIMELIMIT_EVENT] === check_walltimelimit_event
+
+    return model
 end
